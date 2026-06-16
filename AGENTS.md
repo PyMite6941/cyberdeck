@@ -11,8 +11,9 @@ Read `README.md` (project map) and `os/README.md` (OS layer docs) first.
 3. **`os/` must stay minimal and idempotent** — see "Design constraints" in
    `os/README.md`. New boot behaviour = new file in `os/boot/boot.d/`, not edits to
    the runner or the systemd unit.
-4. **Shell scripts use LF endings** (`.gitattributes` enforces this; this folder
-   lives on Windows/OneDrive, so be careful with tools that rewrite files).
+4. **Shell scripts use LF endings** (`.gitattributes` enforces this; the repo
+   lives on a filesystem shared with Windows, so be careful with tools that
+   rewrite files).
 5. Anything in `os/` must work on **Raspberry Pi 4B and newer** (the DFCD design
    uses a Pi 5, but don't add Pi-5-only assumptions), targeting Raspberry Pi OS
    64-bit (Debian Bookworm+), bash, systemd. Memory configs live in `os/memory/`.

@@ -1,7 +1,7 @@
 # Find the Raspberry Pi PCB inside the Central unit assembly and measure how
 # much free space sits above it (HAT clearance), to judge whether an M.2
 # HAT+ / extra storage fits inside the chassis.
-# Run: FreeCADCmd.exe check_pi_clearance.py   (use the 8.3 OneDrive path)
+# Run: FreeCADCmd.exe check_pi_clearance.py   (use short 8.3 path if in Unicode dir)
 import os
 import Part
 

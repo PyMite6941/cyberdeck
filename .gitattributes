@@ -3,3 +3,4 @@
 *.service text eol=lf
 *.3mf binary
 *.step binary
+*.stl binary

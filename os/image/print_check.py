@@ -1,5 +1,5 @@
 # Print-readiness sweep of all DFCD print files + our generated custom parts.
-# Run: FreeCADCmd.exe print_check.py   (via the 8.3 OneDrive path)
+# Run: FreeCADCmd.exe print_check.py   (use short 8.3 path if in Unicode dir)
 # Per file: bounding box (bed fit), facet count, solid?, non-manifold?
 # Flags: NOT-SOLID, NON-MANIFOLD, BED (won't lie flat on a 220x220 bed).
 import os

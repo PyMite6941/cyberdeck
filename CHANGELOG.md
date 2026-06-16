@@ -501,8 +501,8 @@ app). Copied with robocopy preserving `.git` history + all source; **excluded
 `.venv`** (non-portable, was the locked file → recreate with `python -m venv`).
 New repo verified healthy: branch `main` → `origin/main`
 (github.com/PyMite6941/Security-Suite.git), full history, clean tree. The old
-`portfolio/security-suite/` leftover was initially locked (VS Code/OneDrive)
-but **has since been deleted — move 100% complete**.
+`portfolio/security-suite/` leftover was initially locked (VS Code / cloud
+sync) but **has since been deleted — move 100% complete**.
 
 **Added** `apps/grimoire/` — GRIMOIRE, the deck's offline search engine:
 - `grimoire.py` — ingest/search/get/stats CLI + `Grimoire` Python API.
@@ -541,7 +541,7 @@ frame's front face (Y≈33). First attempt above the column (Z90) failed a
 material-removal check (14 mm³ → void), so the script tested 5 candidates and
 auto-picked the solid webbing **between the bottom & middle buttons** (X275.5,
 Z−35.6): removed 80 mm³, result valid/closed. Exported
-`hardware-custom/Screen frame/Rigth screen frame with LED.{step,3mf,stl}`.
+`hardware-custom/Screen frame/Right screen frame with LED.{step,3mf,stl}`.
 Wires to GPIO26 (gpio-led overlay already in config-additions). `make_led_button.py`
 keeps the candidate logic + void check for re-tuning.
 
@@ -711,8 +711,8 @@ spot-checks pass); all LF.
 - `SIZING.md` — measured bounding boxes of all 7 STEP assemblies via headless
   FreeCADCmd (`os/image/measure_parts.py`) + what each dimension implies for
   part selection (10.1" panel, ≤310mm keyboard, NP-F battery, Marble trackball).
-  Note: FreeCADCmd needs the 8.3 path (`OneDrive\9831~1\...`) — it can't read
-  paths containing the Japanese folder name.
+  Note: FreeCADCmd needs the short 8.3 path — it can't read
+  paths containing multi-byte Unicode characters.
 - `BOM.md` — full priced bill of materials with best-pick + budget options;
   ~$430–530 (Pi 5 8GB, shortage pricing) or ~$330–380 (Pi 4B build).
 - `os/image/` — bootable-image pipeline (no pi-gen needed):

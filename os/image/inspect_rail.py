@@ -1,6 +1,6 @@
 # Extract the picatinny rail cross-section so the comms-module clamp foot can be
 # designed to match the deck's actual printed rail.
-# Run: FreeCADCmd.exe inspect_rail.py  (via the 8.3 OneDrive path)
+# Run: FreeCADCmd.exe inspect_rail.py  (use short 8.3 path if in Unicode dir)
 import os
 import Mesh
 import Part

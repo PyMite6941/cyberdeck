@@ -46,7 +46,7 @@ Cosmetic parts (vents, lids, buttons) are fine at 2 perimeters / 15%. The dragch
 discipline</em>: print segments flat, no supports in the pin bores, and dry-fit two links before committing
 to the full run of ~10–14 segments + 2 end pieces. If you are fitting the GPIO-side RTC or taller header
 hardware, substitute <code>hardware-custom/Screen frame/GFPIO lid raised 12mm.3mf</code> for the stock lid;
-and to mount the front status LED, print <code>hardware-custom/Screen frame/Rigth screen frame with LED.3mf</code>
+and to mount the front status LED, print <code>hardware-custom/Screen frame/Right screen frame with LED.3mf</code>
 in place of the stock right screen frame (it adds a 3&nbsp;mm LED hole between the front buttons — see Step&nbsp;6).</p>
 <figure>
 <svg width="680" height="250" viewBox="0 0 680 250">
@@ -197,7 +197,7 @@ or sustained inference draws ~10–12 W; a 74 Wh NP-F970 yields ~5–6 h of real
 <code>config.txt</code> overlays — change either side consistently): encoder A→GPIO17, B→GPIO27, push→GPIO22;
 the three screen-side buttons → GPIO23/24/25, all switching to ground with internal pull-ups (no external
 resistors needed). Status LED: it press-fits into the 3 mm hole in the custom
-<code>Rigth screen frame with LED</code> part — sited in the solid web <em>between the bottom and middle front
+<code>Right screen frame with LED</code> part — sited in the solid web <em>between the bottom and middle front
 buttons</em> (X275.5, Z−35.6 in the model), so the indicator sits right in the control column. Anode to GPIO26
 through 330 Ω, cathode to ground — the kernel's
 <code>gpio-led</code> binding drives it, and <code>deck-mode</code> selects heartbeat / off / disk-activity.

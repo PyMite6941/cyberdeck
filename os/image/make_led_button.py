@@ -1,7 +1,7 @@
 # Cut a 3mm status-LED hole into the right screen frame, in a solid gap within
 # the front button column (the "by the buttons" spot). Tests several candidate
 # positions, picks the one that removes real material, validates, exports.
-# Run: FreeCADCmd.exe make_led_button.py  (8.3 path)
+# Run: FreeCADCmd.exe make_led_button.py  (use short 8.3 path if in Unicode dir)
 import os
 import Mesh
 import Part
@@ -52,9 +52,9 @@ else:
           % (result.isValid(), (result.Solids and result.Solids[0].isClosed()), v0 - result.Volume))
     if not os.path.isdir(OUTDIR):
         os.makedirs(OUTDIR)
-    result.exportStep(os.path.join(OUTDIR, "Rigth screen frame with LED.step"))
+    result.exportStep(os.path.join(OUTDIR, "Right screen frame with LED.step"))
     out = Mesh.Mesh(); out.addFacets(result.tessellate(0.05))
-    out.write(os.path.join(OUTDIR, "Rigth screen frame with LED.3mf"))
-    out.write(os.path.join(OUTDIR, "Rigth screen frame with LED.stl"))
+    out.write(os.path.join(OUTDIR, "Right screen frame with LED.3mf"))
+    out.write(os.path.join(OUTDIR, "Right screen frame with LED.stl"))
     print("EXPORTED to %s" % OUTDIR)
 print("LED_DONE")
