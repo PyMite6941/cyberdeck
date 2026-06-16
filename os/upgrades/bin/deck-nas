@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# deck-nas — share a folder over WiFi via Samba (the [deck] share is defined in
+# smb.conf by setup-upgrades.sh).
+#   deck-nas on        start sharing — prints the \\host\deck path
+#   deck-nas off       stop the Samba services
+#   deck-nas status    show state + UNC path
+#   deck-nas user      (re)set this user's Samba password
+set -euo pipefail
+
+SHARE="${DECK_SHARE:-$HOME/Share}"
+ip() { hostname -I 2>/dev/null | awk '{print $1}'; }
+
+case "${1:-status}" in
+    on)
+        mkdir -p "$SHARE"
+        sudo systemctl start smbd nmbd
+        echo "NAS on — \\\\$(ip)\\deck  (or \\\\$(hostname)\\deck)"
+        echo "folder: $SHARE"
+        ;;
+    off)
+        sudo systemctl stop smbd nmbd
+        echo "NAS off"
+        ;;
+    user)
+        sudo smbpasswd -a "$USER"
+        ;;
+    status)
+        if systemctl is-active --quiet smbd; then
+            echo "NAS on — \\\\$(ip)\\deck"
+        else
+            echo "NAS off"
+        fi
+        ;;
+    *)
+        echo "usage: deck-nas on|off|status|user" >&2
+        exit 1
+        ;;
+esac

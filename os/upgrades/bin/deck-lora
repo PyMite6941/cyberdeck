@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# deck-lora — send/receive short messages over LoRa (SX127x / RFM9x, SPI).
+#   deck-lora send "message"    transmit one packet
+#   deck-lora recv [seconds]    listen (default 30s), print received packets
+#
+# Band: defaults to 923.0 MHz = AS923, the band legal for Thailand. Buy an
+# AS923 (920-925 MHz) module — a US 915 / EU 868 unit is illegal to transmit
+# here and may not even tune. Override with: DECK_LORA_FREQ=868.0 deck-lora ...
+# Wiring: RFM9x on SPI0 — SCK=GPIO11, MOSI=GPIO10, MISO=GPIO9, CS=CE1/GPIO7,
+# RST=GPIO25, 3V3, GND. Enable the bus: dtparam=spi=on in config.txt, reboot.
+set -euo pipefail
+
+PY=/opt/cyberdeck/venv/bin/python3
+[[ -x $PY ]] || { echo "venv missing — run: sudo os/upgrades/setup-upgrades.sh" >&2; exit 1; }
+FREQ="${DECK_LORA_FREQ:-923.0}"
+
+exec "$PY" - "$FREQ" "$@" <<'PY'
+import sys
+freq = float(sys.argv[1])
+args = sys.argv[2:]
+try:
+    import board, busio, digitalio
+    import adafruit_rfm9x
+    spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+    cs = digitalio.DigitalInOut(board.CE1)
+    rst = digitalio.DigitalInOut(board.D25)
+    rfm = adafruit_rfm9x.RFM9x(spi, cs, rst, freq)
+    rfm.tx_power = 20
+except Exception as e:
+    sys.exit("RFM9x init failed (%s).\nCheck wiring and that dtparam=spi=on is set." % e)
+
+cmd = args[0] if args else "recv"
+if cmd == "send":
+    msg = (args[1] if len(args) > 1 else "").encode()
+    rfm.send(msg)
+    print("sent %d bytes @ %.1f MHz" % (len(msg), freq))
+else:
+    import time
+    secs = float(args[1]) if len(args) > 1 else 30.0
+    print("listening %.0fs @ %.1f MHz (Ctrl-C to stop)..." % (secs, freq))
+    t0 = time.time()
+    while time.time() - t0 < secs:
+        pkt = rfm.receive(timeout=1.0)
+        if pkt is not None:
+            try:
+                txt = pkt.decode()
+            except Exception:
+                txt = repr(pkt)
+            print("[rssi %d dBm] %s" % (rfm.last_rssi, txt))
+PY

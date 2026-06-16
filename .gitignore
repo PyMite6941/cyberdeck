@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Databases and data artifacts
+*.db
+*.db-wal
+*.db-shm
+*.zim
+backend/data/
+
+# OS / build logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Windows
+Thumbs.db
+Desktop.ini

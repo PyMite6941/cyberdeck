@@ -1,0 +1,8 @@
+# apps/ holds independent per-app git repos plus one shared venv.
+# These never belong in version control:
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm

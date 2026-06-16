@@ -1,0 +1,21 @@
+[Unit]
+Description=DFCD scroll-handle input daemon
+Documentation=man:deck-scroll
+# Start after the user session is up. Works both graphical and headless:
+# headless sessions get volume-only mode (xdotool absent → auto falls back).
+After=default.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/deck-scroll --mode auto
+Restart=on-failure
+RestartSec=3
+# Fallback display for xdotool; overridden by the actual session env.
+Environment=DISPLAY=:0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

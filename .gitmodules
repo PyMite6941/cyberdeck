@@ -1,0 +1,6 @@
+[submodule "hardware"]
+	path = hardware
+	url = https://github.com/ArcticEnrichmentCenter/DFCD-cyberdeck-files
+[submodule "apps/security-suite"]
+	path = apps/security-suite
+	url = https://github.com/PyMite6941/Security-Suite.git

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# deck-rfid — read NFC/RFID tags with a PN532 reader over I2C.
+#   deck-rfid read     wait for one tag, print its UID, exit
+#   deck-rfid poll     keep printing UIDs as tags appear (Ctrl-C to stop)
+# Wiring: PN532 in I2C mode — SDA=GPIO2 (pin 3), SCL=GPIO3 (pin 5), 3V3, GND.
+# Enable the bus: uncomment dtparam=i2c_arm=on in config.txt, then reboot.
+set -euo pipefail
+
+PY=/opt/cyberdeck/venv/bin/python3
+[[ -x $PY ]] || { echo "venv missing — run: sudo os/upgrades/setup-upgrades.sh" >&2; exit 1; }
+
+exec "$PY" - "${1:-read}" <<'PY'
+import sys, time
+mode = sys.argv[1] if len(sys.argv) > 1 else "read"
+try:
+    import board, busio
+    from adafruit_pn532.i2c import PN532_I2C
+    i2c = busio.I2C(board.SCL, board.SDA)
+    pn = PN532_I2C(i2c, debug=False)
+    pn.SAM_configuration()
+except Exception as e:
+    sys.exit("PN532 init failed (%s).\nCheck wiring and that dtparam=i2c_arm=on is set." % e)
+
+def show(uid):
+    print(":".join("%02X" % b for b in uid))
+
+if mode == "poll":
+    print("polling for tags (Ctrl-C to stop)...")
+    while True:
+        uid = pn.read_passive_target(timeout=0.5)
+        if uid:
+            show(uid)
+            time.sleep(0.4)
+else:
+    print("present a tag...")
+    while True:
+        uid = pn.read_passive_target(timeout=0.5)
+        if uid:
+            show(uid)
+            break
+PY

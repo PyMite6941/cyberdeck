@@ -1,0 +1,17 @@
+[Unit]
+Description=Cyberdeck first-boot installer (runs setup.sh once)
+# Needs working network + DNS for apt; time sync avoids TLS cert failures.
+After=network-online.target time-sync.target
+Wants=network-online.target
+ConditionPathExists=!/opt/cyberdeck/.installed
+
+[Service]
+Type=oneshot
+# apt downloads ~1 GB (FreeCAD) — allow plenty of time on slow Wi-Fi.
+TimeoutStartSec=2h
+ExecStart=/bin/bash /opt/cyberdeck-staging/setup.sh
+ExecStartPost=/bin/bash -c 'mkdir -p /opt/cyberdeck && touch /opt/cyberdeck/.installed && systemctl disable cyberdeck-firstboot.service'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# deck-assistant — talk to DECK, the offline Ollama persona.
+#   deck-assistant                 interactive chat
+#   deck-assistant "your question" one-shot answer
+# The 'deck' model is created by setup-upgrades.sh from assistant/Modelfile.
+set -euo pipefail
+
+command -v ollama >/dev/null 2>&1 || {
+    echo "ollama not installed — run: sudo os/upgrades/setup-upgrades.sh" >&2
+    exit 1
+}
+if ! ollama list 2>/dev/null | grep -q '^deck'; then
+    echo "model 'deck' not found — run: sudo os/upgrades/setup-upgrades.sh" >&2
+    exit 1
+fi
+
+if [[ $# -gt 0 ]]; then
+    ollama run deck "$*"
+else
+    ollama run deck
+fi

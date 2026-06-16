@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# deck-vault — LUKS2-encrypted storage vault in a file container.
+#   deck-vault init [GB]   create ~/Vault.img (default 4 GB) — asks passphrase
+#   deck-vault open        unlock + mount at /mnt/vault
+#   deck-vault close       unmount + lock
+# Why a container, not full-disk: root FDE on a Pi needs an initramfs rework
+# and makes headless boots impossible without a keyboard. A vault encrypts
+# what actually matters (keys, projects, credentials) with zero boot risk.
+set -euo pipefail
+
+IMG="${VAULT_IMG:-$HOME/Vault.img}"
+NAME=deckvault
+MNT=/mnt/vault
+
+case "${1:-}" in
+    init)
+        SIZE="${2:-4}"
+        [[ -e $IMG ]] && { echo "$IMG already exists" >&2; exit 1; }
+        echo "Creating ${SIZE}G container at $IMG ..."
+        fallocate -l "${SIZE}G" "$IMG"
+        chmod 600 "$IMG"
+        echo "Pick a strong passphrase (asked twice):"
+        sudo cryptsetup luksFormat --type luks2 "$IMG"
+        sudo cryptsetup open "$IMG" "$NAME"
+        sudo mkfs.ext4 -q -L deckvault "/dev/mapper/$NAME"
+        sudo cryptsetup close "$NAME"
+        echo "Vault ready. Use: deck-vault open"
+        ;;
+    open)
+        [[ -e $IMG ]] || { echo "no vault at $IMG (run: deck-vault init)" >&2; exit 1; }
+        sudo cryptsetup open "$IMG" "$NAME"
+        sudo mkdir -p "$MNT"
+        sudo mount "/dev/mapper/$NAME" "$MNT"
+        sudo chown "$USER:$USER" "$MNT"
+        echo "Vault open at $MNT"
+        ;;
+    close)
+        sudo umount "$MNT" 2>/dev/null || true
+        sudo cryptsetup close "$NAME" 2>/dev/null || true
+        echo "Vault locked."
+        ;;
+    *)
+        echo "usage: deck-vault init [GB] | open | close" >&2
+        exit 1
+        ;;
+esac

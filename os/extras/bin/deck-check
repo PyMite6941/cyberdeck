@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# deck-check — read-only health diagnostic for the DFCD cyberdeck.
+#
+# Verifies the things that silently cripple the deck if misconfigured:
+#   - GPU: hardware OpenGL (V3D) vs software fallback (llvmpipe) — the #1
+#     killer of FreeCAD 3D performance on a Pi.
+#   - Memory: zram swap active, SD swap off, swappiness tuned.
+#   - Thermals: temperature + throttling flags.
+#   - CPU governor, boot service, optional hardware (encoder, Ollama).
+#
+# Makes NO changes. Exit code: 0 if no FAILs, 1 if any FAIL.
+#
+#   deck-check            run all checks
+#   deck-check --quiet    summary line only
+#
+set -u
+
+G='\e[1;32m'; Y='\e[1;33m'; R='\e[1;31m'; C='\e[1;36m'; D='\e[2;37m'; X='\e[0m'
+PASS=0; WARN=0; FAIL=0
+QUIET=0
+[[ "${1:-}" == "--quiet" || "${1:-}" == "-q" ]] && QUIET=1
+
+pass() { PASS=$((PASS+1)); [[ $QUIET -eq 1 ]] || printf "  ${G}✔${X} %s\n" "$1"; }
+warn() { WARN=$((WARN+1)); [[ $QUIET -eq 1 ]] || printf "  ${Y}!${X} %s\n" "$1"; \
+         [[ $QUIET -eq 1 || -z "${2:-}" ]] || printf "    ${D}%s${X}\n" "$2"; }
+fail() { FAIL=$((FAIL+1)); [[ $QUIET -eq 1 ]] || printf "  ${R}✗${X} %s\n" "$1"; \
+         [[ $QUIET -eq 1 || -z "${2:-}" ]] || printf "    ${D}%s${X}\n" "$2"; }
+info() { [[ $QUIET -eq 1 ]] || printf "  ${D}·${X} %s\n" "$1"; }
+section() { [[ $QUIET -eq 1 ]] || printf "\n${C}── %s ──${X}\n" "$1"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# ── GPU / OpenGL ──────────────────────────────────────────────────────────────
+check_gpu() {
+    section "GPU / OpenGL (FreeCAD)"
+    if ! have glxinfo; then
+        warn "glxinfo not installed — cannot verify hardware rendering" \
+             "sudo apt install mesa-utils, then re-run from the desktop"
+        return
+    fi
+    if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+        info "no display session — run deck-check from the desktop to test GL"
+        return
+    fi
+    local rend
+    rend=$(glxinfo -B 2>/dev/null | grep -i "OpenGL renderer" | cut -d: -f2- | sed 's/^ *//')
+    if [[ -z "$rend" ]]; then
+        warn "could not read OpenGL renderer string"
+        return
+    fi
+    if echo "$rend" | grep -qiE 'llvmpipe|softpipe|swrast'; then
+        fail "SOFTWARE rendering: $rend" \
+             "FreeCAD 3D will crawl. Ensure dtoverlay=vc4-kms-v3d in config.txt and reboot."
+    elif echo "$rend" | grep -qiE 'v3d|vc4|mesa'; then
+        pass "hardware OpenGL: $rend"
+    else
+        info "OpenGL renderer: $rend (unrecognised — verify it's not software)"
+    fi
+}
+
+# ── Memory ────────────────────────────────────────────────────────────────────
+check_memory() {
+    section "Memory / swap"
+    if grep -q zram /proc/swaps 2>/dev/null; then
+        local zs
+        zs=$(awk '/zram/{s+=$3} END{printf "%.0f", s/1024}' /proc/swaps)
+        pass "zram swap active (${zs} MB)"
+    else
+        warn "zram swap NOT active" \
+             "sudo systemctl enable --now zramswap.service (see os/memory/)"
+    fi
+    if grep -qE '/var/swap|/swapfile|dphys' /proc/swaps 2>/dev/null; then
+        warn "SD-card swap is active — wears the card" \
+             "sudo systemctl disable --now dphys-swapfile"
+    fi
+    if [[ -r /proc/sys/vm/swappiness ]]; then
+        local sw; sw=$(cat /proc/sys/vm/swappiness)
+        if [[ "$sw" -ge 100 ]]; then
+            pass "swappiness=$sw (tuned for zram)"
+        else
+            warn "swappiness=$sw (low — expected ~180 for zram)" \
+                 "check /etc/sysctl.d/90-cyberdeck-vm.conf is applied"
+        fi
+    fi
+    if have free; then
+        local avail; avail=$(free -m | awk 'NR==2{print $7}')
+        [[ -n "$avail" ]] && info "available RAM: ${avail} MB"
+    fi
+}
+
+# ── Thermals ──────────────────────────────────────────────────────────────────
+check_thermal() {
+    section "Thermals"
+    if have vcgencmd; then
+        local t; t=$(vcgencmd measure_temp 2>/dev/null | grep -oE '[0-9.]+')
+        if [[ -n "$t" ]]; then
+            local ti=${t%.*}
+            if   [[ $ti -ge 80 ]]; then fail "SoC ${t}°C (hot — will throttle)"
+            elif [[ $ti -ge 70 ]]; then warn "SoC ${t}°C (warm)"
+            else pass "SoC ${t}°C"; fi
+        fi
+        local thr; thr=$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)
+        if [[ -n "$thr" ]]; then
+            if [[ "$thr" == "0x0" ]]; then
+                pass "no throttling (throttled=$thr)"
+            else
+                warn "throttling flags set: $thr" \
+                     "bit0=undervolt now, bit2=throttled now, bit16/18=occurred since boot"
+            fi
+        fi
+    else
+        info "vcgencmd absent (not a Pi?) — skipping thermal check"
+    fi
+}
+
+# ── CPU governor ──────────────────────────────────────────────────────────────
+check_cpu() {
+    section "CPU"
+    local gov=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+    if [[ -r $gov ]]; then
+        local g; g=$(cat "$gov")
+        case "$g" in
+            performance|ondemand|schedutil) pass "governor: $g" ;;
+            powersave) warn "governor: powersave (slow — fine for stealth mode)" \
+                            "deck-mode work|bright switches it back up" ;;
+            *) info "governor: $g" ;;
+        esac
+    else
+        info "no cpufreq governor exposed"
+    fi
+}
+
+# ── Boot service ──────────────────────────────────────────────────────────────
+check_services() {
+    section "Services"
+    if have systemctl; then
+        if systemctl is-enabled cyberdeck-boot.service >/dev/null 2>&1; then
+            local st; st=$(systemctl is-active cyberdeck-boot.service 2>/dev/null)
+            pass "cyberdeck-boot.service enabled (last run: $st)"
+        else
+            info "cyberdeck-boot.service not enabled (base setup.sh not run?)"
+        fi
+    fi
+}
+
+# ── Optional hardware ─────────────────────────────────────────────────────────
+check_hardware() {
+    section "Optional hardware"
+    # Rotary encoder (scroll handle → deck-scroll)
+    if grep -qi rotary /proc/bus/input/devices 2>/dev/null; then
+        pass "rotary encoder detected (deck-scroll can run)"
+    else
+        info "no rotary encoder (wire it + uncomment dtoverlay=rotary-encoder)"
+    fi
+    # Ollama (local AI)
+    if have ollama; then
+        if curl -sf --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
+            pass "Ollama responding on :11434"
+        else
+            warn "ollama installed but not responding" \
+                 "sudo systemctl start ollama"
+        fi
+    fi
+    # RTC
+    if [[ -e /dev/rtc0 ]] && hwclock -r >/dev/null 2>&1; then
+        pass "RTC functional ($(hwclock -r 2>/dev/null | cut -d' ' -f1-2))"
+    elif [[ -e /dev/rtc0 ]]; then
+        info "RTC present but no battery/time (install J5 battery)"
+    fi
+}
+
+# ── run ───────────────────────────────────────────────────────────────────────
+check_gpu
+check_memory
+check_thermal
+check_cpu
+check_services
+check_hardware
+
+printf "\n${C}── Summary ──${X}\n"
+printf "  ${G}%d pass${X}  ${Y}%d warn${X}  ${R}%d fail${X}\n" "$PASS" "$WARN" "$FAIL"
+[[ $FAIL -gt 0 ]] && exit 1 || exit 0

@@ -1,0 +1,13 @@
+# deck-gpio core — generation works without these; execution needs them on-Pi
+# RPi.GPIO      # GPIO control (Raspberry Pi only)
+# adafruit-blinka  # busio, board (circuitpython compat layer on Pi)
+# adafruit-circuitpython-ssd1306
+# adafruit-circuitpython-bme280
+# adafruit-circuitpython-ads1x15
+# adafruit-circuitpython-mpu6050
+# adafruit-circuitpython-servokit
+# adafruit-circuitpython-pn532
+# adafruit-circuitpython-mcp3xxx
+# adafruit-circuitpython-rfm9x
+# pyserial
+# pynmea2

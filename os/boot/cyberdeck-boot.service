@@ -1,0 +1,13 @@
+[Unit]
+Description=Cyberdeck boot scripts (/opt/cyberdeck/boot.d)
+# Run after the network is up so boot scripts can assume connectivity.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/cyberdeck/cyberdeck-boot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

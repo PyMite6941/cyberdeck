@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""
+deck-scroll — DFCD scroll-handle input daemon.
+
+Reads REL_X events from the kernel rotary-encoder device (rotary-encoder
+dtoverlay) and dispatches:
+
+  FreeCAD focused  → synthetic scroll-wheel events via uinput (zoom in/out)
+  any other window → system volume up/down (pactl, amixer fallback)
+
+Managed as a systemd user service (deck-scroll.service):
+  systemctl --user enable --now deck-scroll
+  systemctl --user stop   deck-scroll
+  systemctl --user status deck-scroll
+
+Force a mode for the session:
+  deck-scroll --mode auto      # default: switch by focused window
+  deck-scroll --mode freecad   # always zoom, never touch volume
+  deck-scroll --mode volume    # always volume, even in FreeCAD
+
+Auto-detect picks the first REL_X-capable input device. To pin a specific
+device set DECK_SCROLL_DEV=/dev/input/eventN in the environment.
+
+Requirements: python3-evdev, xdotool (optional — auto falls back to volume
+if xdotool is absent).
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import select
+import subprocess
+import sys
+import time
+from typing import Optional
+
+try:
+    import evdev
+    from evdev import ecodes, UInput
+    HAVE_EVDEV = True
+except ImportError:
+    HAVE_EVDEV = False
+
+POLL_INTERVAL = 0.1   # seconds between active-window rechecks
+VOLUME_STEP   = 5     # volume percent per encoder tick
+HAVE_XDOTOOL  = False  # resolved at startup
+
+
+def _check_xdotool() -> bool:
+    try:
+        r = subprocess.run(["xdotool", "--version"],
+                           capture_output=True, timeout=1)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def find_encoder() -> Optional["evdev.InputDevice"]:
+    """Return the encoder input device, or None with a helpful message."""
+    pin = os.environ.get("DECK_SCROLL_DEV")
+    if pin:
+        try:
+            return evdev.InputDevice(pin)
+        except Exception as e:
+            sys.stderr.write(f"DECK_SCROLL_DEV={pin!r} unusable: {e}\n")
+            return None
+
+    for path in evdev.list_devices():
+        try:
+            dev  = evdev.InputDevice(path)
+            caps = dev.capabilities()
+            if ecodes.EV_REL in caps and ecodes.REL_X in caps[ecodes.EV_REL]:
+                return dev
+        except Exception:
+            continue
+    return None
+
+
+def active_window_name() -> str:
+    if not HAVE_XDOTOOL:
+        return ""
+    try:
+        r = subprocess.run(
+            ["xdotool", "getactivewindow", "getwindowname"],
+            capture_output=True, text=True, timeout=0.5,
+        )
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def is_freecad_focused() -> bool:
+    return "freecad" in active_window_name().lower()
+
+
+def make_scroll_uinput() -> Optional["UInput"]:
+    """Virtual scroll wheel written to by the daemon for FreeCAD zoom."""
+    try:
+        cap = {
+            ecodes.EV_REL: [ecodes.REL_WHEEL, ecodes.REL_WHEEL_HI_RES],
+        }
+        return UInput(cap, name="deck-scroll-wheel", vendor=0x1D6B, product=0x0001)
+    except Exception as e:
+        sys.stderr.write(
+            f"uinput unavailable ({e}) — FreeCAD zoom disabled; "
+            "check /dev/uinput permissions or run: "
+            "sudo udevadm control --reload\n"
+        )
+        return None
+
+
+def emit_scroll(ui: Optional["UInput"], direction: int) -> None:
+    """direction: +1 = scroll up (zoom in), -1 = scroll down (zoom out)."""
+    if ui is None:
+        return
+    try:
+        ui.write(ecodes.EV_REL, ecodes.REL_WHEEL,         direction)
+        ui.write(ecodes.EV_REL, ecodes.REL_WHEEL_HI_RES,  direction * 120)
+        ui.syn()
+    except Exception as e:
+        sys.stderr.write(f"scroll write error: {e}\n")
+
+
+def change_volume(delta_pct: int) -> None:
+    """pactl first, amixer fallback."""
+    sign = "+" if delta_pct > 0 else "-"
+    amt  = abs(delta_pct)
+    try:
+        subprocess.run(
+            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{sign}{amt}%"],
+            timeout=1, check=True, capture_output=True,
+        )
+        return
+    except (FileNotFoundError, subprocess.CalledProcessError,
+            subprocess.TimeoutExpired):
+        pass
+    try:
+        subprocess.run(
+            ["amixer", "-q", "sset", "Master", f"{amt}%{sign}"],
+            timeout=1, capture_output=True,
+        )
+    except Exception:
+        pass
+
+
+def run(args: argparse.Namespace) -> int:
+    global HAVE_XDOTOOL
+
+    if not HAVE_EVDEV:
+        sys.stderr.write(
+            "python3-evdev not installed.\n"
+            "  sudo apt install python3-evdev\n"
+        )
+        return 1
+
+    HAVE_XDOTOOL = _check_xdotool()
+    if not HAVE_XDOTOOL and args.mode == "auto":
+        sys.stderr.write(
+            "xdotool not found — auto mode will fall back to volume always.\n"
+            "  sudo apt install xdotool   to enable FreeCAD focus detection\n"
+        )
+
+    dev = find_encoder()
+    if dev is None:
+        sys.stderr.write(
+            "No rotary encoder input device found.\n"
+            "  1. Uncomment and configure in /boot/firmware/config.txt:\n"
+            "       dtoverlay=rotary-encoder,pin_a=17,pin_b=27,"
+            "relative_axis=1,steps-per-period=2\n"
+            "  2. Reboot, then re-run deck-scroll.\n"
+            "  3. Or pin a specific device: DECK_SCROLL_DEV=/dev/input/eventN\n"
+        )
+        return 1
+
+    print(f"deck-scroll: encoder → {dev.path} ({dev.name!r})", flush=True)
+    print(f"  mode={args.mode}  volume_step={VOLUME_STEP}%"
+          f"  xdotool={'yes' if HAVE_XDOTOOL else 'no'}", flush=True)
+
+    ui = make_scroll_uinput() if args.mode != "volume" else None
+
+    try:
+        dev.grab()
+    except Exception as e:
+        sys.stderr.write(
+            f"Cannot grab {dev.path}: {e}\n"
+            "  Is the user in the 'input' group?  Run: groups\n"
+            "  If not: sudo usermod -aG input $USER  then log out + back in.\n"
+        )
+        if ui:
+            ui.close()
+        return 1
+
+    force_mode    = args.mode   # "auto" | "freecad" | "volume"
+    last_check    = 0.0
+    in_freecad    = False
+
+    try:
+        while True:
+            ready, _, _ = select.select([dev.fd], [], [], POLL_INTERVAL)
+            if not ready:
+                continue
+
+            for event in dev.read():
+                if event.type != ecodes.EV_REL or event.code != ecodes.REL_X:
+                    continue
+
+                # Positive value = clockwise = "up" (zoom in / vol up)
+                direction = 1 if event.value > 0 else -1
+
+                # Refresh focus cache at most once per POLL_INTERVAL
+                now = time.monotonic()
+                if force_mode == "auto" and now - last_check > POLL_INTERVAL:
+                    in_freecad  = is_freecad_focused()
+                    last_check  = now
+
+                use_freecad = (
+                    force_mode == "freecad"
+                    or (force_mode == "auto" and in_freecad)
+                )
+
+                if use_freecad:
+                    emit_scroll(ui, direction)
+                else:
+                    change_volume(direction * VOLUME_STEP)
+
+    except KeyboardInterrupt:
+        pass
+    except OSError as e:
+        sys.stderr.write(f"device read error: {e}\n")
+        return 1
+    finally:
+        try:
+            dev.ungrab()
+        except Exception:
+            pass
+        if ui:
+            try:
+                ui.close()
+            except Exception:
+                pass
+
+    return 0
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(
+        description="DFCD scroll-handle input daemon",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Managed via: systemctl --user {enable,start,stop,status} deck-scroll\n"
+            "Encoder wiring: uncomment dtoverlay=rotary-encoder in config.txt and reboot."
+        ),
+    )
+    p.add_argument(
+        "--mode",
+        choices=["auto", "freecad", "volume"],
+        default="auto",
+        help=(
+            "auto=switch by focused window (default), "
+            "freecad=always zoom, volume=always volume"
+        ),
+    )
+    args = p.parse_args()
+    sys.exit(run(args))
+
+
+if __name__ == "__main__":
+    main()

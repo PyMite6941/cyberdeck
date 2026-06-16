@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# deck-hid — make the deck act as a USB keyboard (USB HID gadget), so it can
+# type into another computer over the USB-C cable. Legit uses: automating your
+# own machines, provisioning a headless box, kiosk setup, accessibility.
+#
+#   sudo deck-hid on            create the HID keyboard gadget (/dev/hidg0)
+#   sudo deck-hid off           remove it
+#   deck-hid status             show whether it's active
+#   deck-hid type "text"        type a string into the host (US layout)
+#   deck-hid key <hex> [mod]    send one raw HID usage code (e.g. 0x28 = Enter)
+#
+# Connect the deck's USB-C port to the host. Works on Pi 4 / Zero via dwc2 on
+# the USB-C power port. On Pi 5, USB-C peripheral mode is limited — test first.
+# Enable device mode with: dtoverlay=dwc2,dr_mode=peripheral (config.txt);
+# this script also tries `modprobe dwc2`.
+set -euo pipefail
+
+G=/sys/kernel/config/usb_gadget/deck
+# Standard USB HID boot-keyboard report descriptor (8-byte reports).
+DESC='\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x01\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01\x75\x03\x91\x01\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07\x19\x00\x29\x65\x81\x00\xc0'
+
+need_root() { [[ $EUID -eq 0 ]] || { echo "use sudo for 'deck-hid $1'" >&2; exit 1; }; }
+
+gadget_on() {
+    need_root on
+    modprobe libcomposite 2>/dev/null || true
+    modprobe dwc2 2>/dev/null || true
+    [[ -d $G ]] && { echo "HID already on (/dev/hidg0)"; return; }
+    mkdir -p "$G"; cd "$G"
+    echo 0x1d6b > idVendor          # Linux Foundation
+    echo 0x0104 > idProduct         # Multifunction Composite Gadget
+    echo 0x0100 > bcdDevice
+    echo 0x0200 > bcdUSB
+    mkdir -p strings/0x409
+    echo "DFCD" > strings/0x409/manufacturer
+    echo "DFCD Cyberdeck Keyboard" > strings/0x409/product
+    echo "deck-$(date +%s)" > strings/0x409/serialnumber
+    mkdir -p configs/c.1/strings/0x409
+    echo "HID keyboard" > configs/c.1/strings/0x409/configuration
+    echo 250 > configs/c.1/MaxPower
+    mkdir -p functions/hid.usb0
+    echo 1 > functions/hid.usb0/protocol      # 1 = keyboard
+    echo 1 > functions/hid.usb0/subclass      # 1 = boot interface
+    echo 8 > functions/hid.usb0/report_length
+    echo -ne "$DESC" > functions/hid.usb0/report_desc
+    ln -s functions/hid.usb0 configs/c.1/
+    local udc; udc=$(ls /sys/class/udc 2>/dev/null | head -n1)
+    [[ -n $udc ]] || { echo "no UDC found — enable dwc2 peripheral mode (see header)" >&2; exit 1; }
+    echo "$udc" > UDC
+    echo "HID keyboard on — /dev/hidg0 (the host should now see a keyboard)"
+}
+
+gadget_off() {
+    need_root off
+    [[ -d $G ]] || { echo "HID already off"; return; }
+    echo "" > "$G/UDC" 2>/dev/null || true
+    rm -f "$G/configs/c.1/hid.usb0"
+    rmdir "$G/configs/c.1/strings/0x409" "$G/configs/c.1" 2>/dev/null || true
+    rmdir "$G/functions/hid.usb0" "$G/strings/0x409" "$G" 2>/dev/null || true
+    echo "HID keyboard off"
+}
+
+case "${1:-status}" in
+    on) gadget_on ;;
+    off) gadget_off ;;
+    status)
+        [[ -d $G && -e /dev/hidg0 ]] && echo "HID on (/dev/hidg0)" || echo "HID off"
+        ;;
+    type)
+        [[ -e /dev/hidg0 ]] || { echo "HID off — run: sudo deck-hid on" >&2; exit 1; }
+        python3 - "${2:-}" <<'PY'
+import sys
+s = sys.argv[1] if len(sys.argv) > 1 else ""
+# US-layout ASCII -> (modifier, HID usage code). modifier 0x02 = Left Shift.
+m = {}
+for i, c in enumerate("abcdefghijklmnopqrstuvwxyz"): m[c] = (0, 0x04 + i)
+for i, c in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"): m[c] = (2, 0x04 + i)
+for i, c in enumerate("1234567890"): m[c] = (0, 0x1e + i)
+m.update({
+    ' ': (0, 0x2c), '\n': (0, 0x28), '\t': (0, 0x2b),
+    '-': (0, 0x2d), '_': (2, 0x2d), '=': (0, 0x2e), '+': (2, 0x2e),
+    '[': (0, 0x2f), '{': (2, 0x2f), ']': (0, 0x30), '}': (2, 0x30),
+    '\\': (0, 0x31), '|': (2, 0x31), ';': (0, 0x33), ':': (2, 0x33),
+    "'": (0, 0x34), '"': (2, 0x34), '`': (0, 0x35), '~': (2, 0x35),
+    ',': (0, 0x36), '<': (2, 0x36), '.': (0, 0x37), '>': (2, 0x37),
+    '/': (0, 0x38), '?': (2, 0x38),
+    '!': (2, 0x1e), '@': (2, 0x1f), '#': (2, 0x20), '$': (2, 0x21),
+    '%': (2, 0x22), '^': (2, 0x23), '&': (2, 0x24), '*': (2, 0x25),
+    '(': (2, 0x26), ')': (2, 0x27),
+})
+import time
+with open('/dev/hidg0', 'wb') as f:
+    for ch in s:
+        mod, key = m.get(ch, (0, 0))
+        if not key:
+            continue
+        f.write(bytes([mod, 0, key, 0, 0, 0, 0, 0])); f.flush()
+        time.sleep(0.02)                   # minimum keystroke duration
+        f.write(bytes(8)); f.flush()       # key release
+PY
+        echo "typed."
+        ;;
+    key)
+        [[ -e /dev/hidg0 ]] || { echo "HID off — run: sudo deck-hid on" >&2; exit 1; }
+        key="${2:?usage: deck-hid key <hex-usage> [hex-modifier]}"
+        mod="${3:-0}"
+        python3 -c "open('/dev/hidg0','wb').write(bytes([int('$mod',16),0,int('$key',16),0,0,0,0,0])+bytes(8))"
+        echo "sent."
+        ;;
+    *)
+        echo "usage: deck-hid on|off|status|type \"text\"|key <hex> [mod]" >&2
+        exit 1
+        ;;
+esac

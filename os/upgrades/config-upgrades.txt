@@ -1,0 +1,15 @@
+
+# --- CYBERDECK-UPGRADES ---
+# Hardware enables for os/upgrades/ (appended by setup-upgrades.sh). Uncomment
+# the lines for parts you have actually wired, then reboot.
+
+# USB HID keyboard mode (deck-hid). Pi 4 / Zero: device mode on the USB-C power
+# port. Pi 5: USB-C peripheral mode is limited — test before relying on it.
+#dtoverlay=dwc2,dr_mode=peripheral
+
+# NFC/RFID — PN532 over I2C (SDA=GPIO2/pin3, SCL=GPIO3/pin5, 3V3, GND):
+#dtparam=i2c_arm=on
+
+# LoRa — SX127x/RFM9x over SPI0 (SCK=11 MOSI=10 MISO=9 CS=CE1/GPIO7 RST=GPIO25):
+#dtparam=spi=on
+# --- END CYBERDECK-UPGRADES ---

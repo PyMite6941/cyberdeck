@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# deck-drive — attach network-backed "virtual disks" to the deck.
+#   deck-drive iscsi <portal-ip> [iqn]   discover + login; target appears as /dev/sdX
+#   deck-drive cloud <remote:path>       rclone mount at ~/CloudDrive (bg, vfs cache)
+#   deck-drive list                      show attached iscsi sessions + rclone mounts
+#   deck-drive off                       logout all iscsi + unmount cloud
+# One-time setup: 'rclone config' for cloud remotes; NAS side needs an iSCSI target.
+set -euo pipefail
+
+MNT="$HOME/CloudDrive"
+
+case "${1:-}" in
+    iscsi)
+        PORTAL="${2:?usage: deck-drive iscsi <portal-ip> [iqn]}"
+        echo "Discovering targets on $PORTAL ..."
+        sudo iscsiadm -m discovery -t sendtargets -p "$PORTAL"
+        if [[ -n "${3:-}" ]]; then
+            sudo iscsiadm -m node -T "$3" -p "$PORTAL" --login
+        else
+            sudo iscsiadm -m node -p "$PORTAL" --login
+        fi
+        echo "Logged in. New block device:"
+        lsblk -o NAME,SIZE,MODEL,TRAN | grep -i iscsi || lsblk
+        ;;
+    cloud)
+        REMOTE="${2:?usage: deck-drive cloud <remote:path>  (run 'rclone config' first)}"
+        mkdir -p "$MNT"
+        mountpoint -q "$MNT" && { echo "$MNT already mounted"; exit 1; }
+        rclone mount "$REMOTE" "$MNT" --vfs-cache-mode writes --daemon
+        echo "Mounted $REMOTE at $MNT"
+        ;;
+    list)
+        echo "── iSCSI sessions ──"
+        sudo iscsiadm -m session 2>/dev/null || echo "  none"
+        echo "── cloud mounts ──"
+        mount | grep rclone || echo "  none"
+        ;;
+    off)
+        mountpoint -q "$MNT" && fusermount -u "$MNT" && echo "cloud unmounted"
+        sudo iscsiadm -m node --logoutall=all 2>/dev/null && echo "iscsi sessions closed" || true
+        ;;
+    *)
+        echo "usage: deck-drive iscsi <portal> [iqn] | cloud <remote:path> | list | off" >&2
+        exit 1
+        ;;
+esac

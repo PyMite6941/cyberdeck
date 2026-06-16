@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# deck-help — show all cyberdeck commands and their usage.
+#
+# Usage:  deck-help [section]
+#
+# Sections:
+#   base      Shell aliases and built-in helpers
+#   modes     Display/screen modes (deck-mode)
+#   system    System commands (deck-lite, deck-ide, deck-desktop, etc.)
+#   storage   Storage commands (deck-vault, deck-drive)
+#   apps      App management (deck-app)
+#   network   Network commands (deck-nas, deck-hid, etc.)
+#   radio     Radio commands (deck-rfid, deck-lora)
+#   ai        AI/ML commands (deck-assistant, deckcoder, tune-ollama)
+#   all       Show everything (default)
+#
+set -u
+
+G='\e[1;32m'; C='\e[1;36m'; D='\e[2;37m'; X='\e[0m'
+
+section() {
+    printf "\n${C}── %s ──────────────────────────────────────${X}\n" "$1"
+}
+cmd() {
+    local name="$1" desc="$2" usage="${3:-}"
+    # Only show commands whose binaries are installed (or are shell aliases).
+    case "$name" in
+        ll|mem|temp|bootlog|deck|deck-lite|deck-gui) ;;  # aliases/shell funcs
+        deckcoder)
+            command -v ollama >/dev/null 2>&1 || return ;;
+        deck-assistant|tune-ollama)
+            command -v ollama >/dev/null 2>&1 || return ;;
+        *)
+            command -v "$name" >/dev/null 2>&1 || return ;;
+    esac
+    printf "  ${G}%-20s${X} %s\n" "$name" "$desc"
+    if [[ -n $usage ]]; then
+        printf "  ${D}%-20s %s${X}\n" "" "$usage"
+    fi
+}
+
+show_base() {
+    section "Shell Helpers"
+    cmd "ll"        "List files with details"       "alias for ls -lah"
+    cmd "mem"       "Show memory usage"              "alias for free -h"
+    cmd "temp"      "Show SoC temperature"           "temp"
+    cmd "bootlog"   "View boot script log"           "cat /var/log/cyberdeck-boot.log"
+    cmd "deck"      "Go to /opt/cyberdeck"           "alias for cd /opt/cyberdeck"
+    cmd "deck-lite" "Drop to console (save ~500 MB)" "deck-lite"
+    cmd "deck-gui"  "Restore the desktop"            "deck-gui"
+}
+
+show_modes() {
+    section "Display Modes"
+    cmd "deck-mode"  "Switch screen/lighting mode"   "deck-mode stealth|work|bright"
+}
+
+show_system() {
+    section "System Commands"
+    cmd "deck-ide"     "Headless IDE (drops desktop, tmux + Neovim + Claude)" "deck-ide"
+    cmd "deck-desktop" "Restore desktop after deck-ide"                       "deck-desktop"
+    cmd "deck-check"   "Health check (GPU/zram/thermal/governor)"            "deck-check [--quiet]"
+    cmd "deck-scroll"  "Scroll-handle daemon (encoder → zoom/volume)"        "systemctl --user start deck-scroll"
+    cmd "deck-help"    "Show this help"                                       "deck-help [section]"
+}
+
+show_storage() {
+    section "Storage"
+    cmd "deck-vault" "LUKS-encrypted file container"  "deck-vault init|open|close"
+    cmd "deck-drive" "Attach network/cloud storage"   "deck-drive iscsi|cloud|list|off"
+}
+
+show_apps() {
+    section "App Management"
+    cmd "deck-app" "Install, list, run apps"          "deck-app install|create|list|run"
+}
+
+show_network() {
+    section "Network"
+    cmd "deck-nas"  "Samba share over WiFi"           "deck-nas on|off|status|user"
+    cmd "deck-hid"  "USB HID keyboard gadget"         "deck-hid on|off|status|type|key"
+}
+
+show_radio() {
+    section "Radio"
+    cmd "deck-rfid" "NFC/RFID reader (PN532)"         "deck-rfid read|status"
+    cmd "deck-lora" "LoRa radio (SX127x, 923 MHz)"    "deck-lora send|recv|status"
+}
+
+show_ai() {
+    section "AI / ML"
+    cmd "deckcoder"    "Tuned Ollama model for coding" "ollama run deckcoder"
+    cmd "deck-assistant" "Ollama persona 'DECK'"       "deck-assistant 'ask something'"
+    cmd "claude"       "Claude Code CLI"               "claude (run once to log in)"
+    cmd "tune-ollama"  "Create tuned Ollama model"     "sudo ./ai/tune-ollama.sh"
+}
+
+case "${1:-all}" in
+    base)    show_base ;;
+    modes)   show_modes ;;
+    system)  show_system ;;
+    storage) show_storage ;;
+    apps)    show_apps ;;
+    network) show_network ;;
+    radio)   show_radio ;;
+    ai)      show_ai ;;
+    all|*)
+        printf "\n${G}╔══════════════════════════════════════════════╗${X}"
+        printf "\n${G}║       Cyberdeck Command Reference           ║${X}"
+        printf "\n${G}╚══════════════════════════════════════════════╝${X}"
+        show_base
+        show_modes
+        show_system
+        show_storage
+        show_apps
+        show_network
+        show_radio
+        show_ai
+        printf "\n${D}Run 'deck-help <section>' for focused view.${X}\n"
+        printf "${D}See os/README.md for full OS layer documentation.${X}\n\n"
+        ;;
+esac

@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# deck-mode — switch the deck between operating modes.
+#   deck-mode stealth   dim screen (gamma shift), status LED off, power LED off
+#   deck-mode work      normal screen, status LED heartbeat (default)
+#   deck-mode bright    max backlight (if panel speaks DDC), LED = disk activity
+#   deck-mode           show current mode
+#   deck-mode --help    show usage
+# Screen dimming uses gammastep (software, works on any panel); true backlight
+# control additionally tries ddcutil — many HDMI panels ignore it, that's fine.
+set -u
+
+MODE_FILE=/tmp/.deck-mode
+LED=/sys/class/leds/deckstatus/trigger
+PWR=/sys/class/leds/PWR/brightness
+
+set_led() {
+    if [[ -e $LED ]]; then
+        echo "$1" | sudo tee "$LED" >/dev/null 2>&1 || true
+    fi
+}
+set_pwr() {
+    if [[ -e $PWR ]]; then
+        echo "$1" | sudo tee "$PWR" >/dev/null 2>&1 || true
+    fi
+}
+kill_gamma() {
+    pkill -x gammastep 2>/dev/null || true
+}
+set_gov() {
+    # Switch CPU governor: performance | ondemand | powersave
+    local gov="$1"
+    for cpu_gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        [[ -w $cpu_gov ]] && echo "$gov" | sudo tee "$cpu_gov" >/dev/null 2>&1 || true
+    done
+}
+
+case "${1:-show}" in
+    stealth)
+        kill_gamma
+        if command -v gammastep >/dev/null; then
+            nohup gammastep -O 3400 -b 0.4 >/dev/null 2>&1 &
+        else
+            echo "  (gammastep not installed — skipping dim)"
+        fi
+        set_led none
+        set_pwr 0
+        set_gov powersave
+        echo stealth > "$MODE_FILE"
+        echo "deck-mode: stealth (dim + warm, LEDs off, CPU powersave)"
+        ;;
+    work)
+        kill_gamma
+        if command -v ddcutil >/dev/null; then
+            sudo ddcutil setvcp 10 70 >/dev/null 2>&1 || true
+        fi
+        set_led heartbeat
+        set_pwr 1
+        set_gov ondemand
+        echo work > "$MODE_FILE"
+        echo "deck-mode: work (normal, CPU ondemand)"
+        ;;
+    bright)
+        kill_gamma
+        if command -v ddcutil >/dev/null; then
+            sudo ddcutil setvcp 10 100 >/dev/null 2>&1 || true
+        fi
+        set_led mmc0
+        set_pwr 1
+        set_gov performance
+        echo bright > "$MODE_FILE"
+        echo "deck-mode: bright (max backlight, LED = disk activity, CPU performance)"
+        ;;
+    show)
+        local gov=""
+        [[ -r /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]] \
+            && gov=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
+        echo "deck-mode: $(cat "$MODE_FILE" 2>/dev/null || echo work)  (CPU: ${gov:-n/a})"
+        ;;
+    -h|--help|help)
+        echo "Usage: deck-mode [stealth|work|bright|show]"
+        echo
+        echo "Modes:"
+        echo "  stealth   Dim screen (gammastep), LEDs off, CPU powersave"
+        echo "  work      Normal screen, LED heartbeat, CPU ondemand (default)"
+        echo "  bright    Max backlight (ddcutil), LED = disk activity, CPU performance"
+        echo "  show      Display current mode + CPU governor"
+        echo
+        echo "Hardware notes:"
+        echo "  - Status LED needs gpio-led overlay (config.txt: dtoverlay=gpio-led)"
+        echo "  - ddcutil backlight works only on HDMI panels that support DDC/CI"
+        echo "  - gammastep is a software dim — works on any display"
+        ;;
+    *)
+        echo "Usage: deck-mode [stealth|work|bright]" >&2
+        echo "Run 'deck-mode --help' for details." >&2
+        exit 1
+        ;;
+esac

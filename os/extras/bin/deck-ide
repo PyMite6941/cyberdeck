@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# deck-ide — headless IDE mode for the cyberdeck.
+#
+# Drops the desktop (frees ~2 GB RAM), starts a tmux session with:
+#   left:   Neovim
+#   right:  top — Claude Code
+#   bottom: htop (hardware monitor)
+#
+# Reboot or run `deck-desktop` to restore the GUI.
+#
+set -euo pipefail
+
+SESSION="deck-ide"
+TMUX=${TMUX:-}
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+warn() { echo "$*" >&2; }
+die()  { warn "$*"; exit 1; }
+
+is_console() {
+    [[ "$(systemctl get-default)" == "multi-user.target" ]]
+}
+
+# ── main ─────────────────────────────────────────────────────────────────────
+
+# Already in a tmux session? Attach or error.
+if [[ -n $TMUX ]]; then
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+        echo "Already in a tmux session. Switching to '$SESSION'..."
+        tmux switch-client -t "$SESSION"
+        exit 0
+    fi
+    die "Already inside tmux. Run 'deck-ide' from a plain console."
+fi
+
+# Not on console yet — switch to multi-user.target first.
+if ! is_console; then
+    echo "==> Switching to multi-user.target (dropping desktop)..."
+    # Flag file: bashrc-cyberdeck.sh reads this on the next login and
+    # auto-launches deck-ide so the user lands straight in the session.
+    touch "$HOME/.deck-ide-pending"
+    sudo systemctl set-default multi-user.target
+    # Kill the display manager to free the full ~2 GB.
+    for dm in lightdm gdm3 gdm sddm; do
+        if systemctl list-unit-files "$dm.service" --no-legend 2>/dev/null | grep -q "$dm"; then
+            sudo systemctl stop "$dm.service" 2>/dev/null || true
+        fi
+    done
+    # Give the DM time to die.
+    sleep 1
+    sudo systemctl isolate multi-user.target
+    # After isolate the session restarts; bashrc picks up .deck-ide-pending.
+    exit 0
+fi
+
+# We're on the console now. Create the tmux session.
+echo "==> Starting headless IDE session '$SESSION'..."
+
+# Session already exists? Attach.
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+    exec tmux attach-session -t "$SESSION"
+fi
+
+# Create the session with one window, three panes:
+#   left 60% — Neovim
+#   right-top — Claude Code (or shell if unavailable)
+#   right-bottom — htop
+tmux new-session -d -s "$SESSION" -n "dev" -x "$(tput cols)" -y "$(tput lines)"
+
+# Left pane: Neovim (big)
+tmux send-keys -t "$SESSION" "nvim" Enter
+
+# Split right, top pane: Claude Code
+tmux split-window -h -t "$SESSION" -p 40
+sleep 0.2
+if command -v claude >/dev/null 2>&1; then
+    tmux send-keys -t "$SESSION" "claude" Enter
+else
+    tmux send-keys -t "$SESSION" "echo 'Claude Code not installed — run sudo ./os/ai/setup-ai.sh'" Enter
+fi
+
+# Split right-bottom: htop
+tmux split-window -v -t "$SESSION" -p 30
+sleep 0.2
+tmux send-keys -t "$SESSION" "htop" Enter
+
+# Go back to left pane (Neovim)
+tmux select-pane -t "$SESSION:0.0"
+
+# Attach
+exec tmux attach-session -t "$SESSION"

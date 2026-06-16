@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# deck-desktop — restore the desktop after deck-ide.
+#
+# Re-enables the display manager and switches back to graphical.target.
+# Run from the console after `deck-ide`.
+#
+set -euo pipefail
+
+echo "==> Restoring graphical target..."
+sudo systemctl set-default graphical.target
+
+# Re-enable and start the display manager.
+for dm in lightdm gdm3 gdm sddm; do
+    if systemctl list-unit-files "$dm.service" --no-legend 2>/dev/null | grep -q "$dm"; then
+        echo "  starting $dm..."
+        sudo systemctl enable "$dm.service" 2>/dev/null || true
+        sudo systemctl start "$dm.service" 2>/dev/null || true
+        break
+    fi
+done
+
+echo "==> Switching to graphical.target..."
+sudo systemctl isolate graphical.target
+
+echo "Desktop restored. The display manager should start shortly."

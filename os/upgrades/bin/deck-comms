@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# deck-comms — drive the DFCD comms module (Pico USB bridge: PN532 NFC + LoRa).
+# The module shows up as a USB serial device; this finds it (by PINGing each
+# port) and speaks the bridge's line protocol.
+#   deck-comms status            is the module present? which radios are up?
+#   deck-comms nfc               read one NFC tag UID
+#   deck-comms lora tx "message" transmit a LoRa packet
+#   deck-comms lora rx [seconds] listen for LoRa packets (default 30s)
+set -euo pipefail
+
+PY=/opt/cyberdeck/venv/bin/python3
+[[ -x $PY ]] || { echo "venv missing — run: sudo os/upgrades/setup-upgrades.sh" >&2; exit 1; }
+
+exec "$PY" - "$@" <<'PY'
+import sys, time
+try:
+    import serial, serial.tools.list_ports
+except Exception:
+    sys.exit("pyserial missing — run: sudo os/upgrades/setup-upgrades.sh")
+
+def find_bridge():
+    for p in serial.tools.list_ports.comports():
+        try:
+            s = serial.Serial(p.device, 115200, timeout=1)
+        except Exception:
+            continue
+        try:
+            s.reset_input_buffer()
+            s.write(b"PING\n")
+            time.sleep(0.3)
+            if "PONG DFCD-COMMS" in s.readline().decode(errors="ignore"):
+                return s
+        except Exception:
+            pass
+        try:
+            s.close()
+        except Exception:
+            pass
+    return None
+
+def cmd(s, line, wait=0.6):
+    s.reset_input_buffer()
+    s.write((line + "\n").encode())
+    time.sleep(wait)
+    return s.readline().decode(errors="ignore").strip()
+
+args = sys.argv[1:]
+if not args:
+    sys.exit("usage: deck-comms status | nfc | lora tx \"msg\" | lora rx [secs]")
+
+s = find_bridge()
+if s is None:
+    sys.exit("comms module not found — is it plugged into a rail USB port and powered?")
+
+try:
+    op = args[0]
+    if op == "status":
+        print(cmd(s, "STATUS"))
+    elif op == "nfc":
+        print("present a tag...")
+        for _ in range(40):                      # ~20s of polling
+            r = cmd(s, "NFC", 0.5)
+            if r.startswith("UID:"):
+                print(r); break
+        else:
+            print("no tag seen")
+    elif op == "lora" and len(args) > 1 and args[1] == "tx":
+        print(cmd(s, "LORA TX " + (args[2] if len(args) > 2 else "")))
+    elif op == "lora" and len(args) > 1 and args[1] == "rx":
+        secs = args[2] if len(args) > 2 else "30"
+        print(cmd(s, "LORA RX " + secs))
+        t0 = time.time()
+        while time.time() - t0 < float(secs) + 2:
+            ln = s.readline().decode(errors="ignore").strip()
+            if ln == "END":
+                break
+            if ln:
+                print(ln)
+    else:
+        sys.exit("usage: deck-comms status | nfc | lora tx \"msg\" | lora rx [secs]")
+finally:
+    s.close()
+PY

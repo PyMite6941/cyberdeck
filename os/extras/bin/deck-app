@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# deck-app — download/install apps into the deck's apps/ directory.
+#
+# Usage:
+#   deck-app install <url> [<folder-name>]    # download + extract into apps/
+#   deck-app create  <name>                   # scaffold a new app folder
+#   deck-app list                             # list installed apps
+#   deck-app run    <name>                    # run an app by folder name
+#
+# Default destination: ~/apps/ (the deck's main app directory).
+# Set DECK_APPS_DIR to override.
+#
+set -euo pipefail
+
+DECK_APPS_DIR="${DECK_APPS_DIR:-$HOME/apps}"
+mkdir -p "$DECK_APPS_DIR"
+
+usage() {
+    cat <<EOF
+Usage: deck-app <command> [args]
+
+Commands:
+  install <url> [name]   Download and extract into apps/ (supports .zip, .tar.gz)
+  create  <name>         Scaffold a new app folder with run.sh template
+  list                   List installed apps
+  run     <name>         Run an app by folder name (executes its run.sh)
+  help                   Show this help
+EOF
+}
+
+case "${1:-help}" in
+    install)
+        URL="${2:-}"
+        NAME="${3:-}"
+        [[ -z $URL ]] && { echo "Usage: deck-app install <url> [name]" >&2; exit 1; }
+        [[ -z $NAME ]] && NAME="$(basename "$URL" | sed 's/\.[^.]*$//' | sed 's/\.tar$//')"
+        DEST="$DECK_APPS_DIR/$NAME"
+        mkdir -p "$DEST"
+        TMPDIR=$(mktemp -d)
+        case "$URL" in
+            *.zip)
+                curl -sL "$URL" -o "$TMPDIR/app.zip"
+                unzip -q "$TMPDIR/app.zip" -d "$DEST"
+                ;;
+            *.tar.gz|*.tgz)
+                curl -sL "$URL" -o "$TMPDIR/app.tar.gz"
+                tar -xzf "$TMPDIR/app.tar.gz" -C "$DEST"
+                ;;
+            *.git|*github.com*)
+                git clone "$URL" "$DEST"
+                ;;
+            *)
+                curl -sL "$URL" -o "$DEST/$(basename "$URL")"
+                ;;
+        esac
+        rm -rf "$TMPDIR"
+        echo "Installed to $DEST"
+        ;;
+
+    create)
+        NAME="${2:-}"
+        [[ -z $NAME ]] && { echo "Usage: deck-app create <name>" >&2; exit 1; }
+        DEST="$DECK_APPS_DIR/$NAME"
+        [[ -d $DEST ]] && { echo "Already exists: $DEST" >&2; exit 1; }
+        mkdir -p "$DEST"
+        cat > "$DEST/run.sh" <<'RUNEOF'
+#!/usr/bin/env bash
+# <APP-NAME> — what this app does
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "Hello from <APP-NAME>!"
+RUNEOF
+        chmod +x "$DEST/run.sh"
+        echo "Scaffolded $DEST/run.sh"
+        ;;
+
+    list)
+        echo "Apps in $DECK_APPS_DIR:"
+        for d in "$DECK_APPS_DIR"/*/; do
+            name=$(basename "$d")
+            has_run=""
+            [[ -f "$d/run.sh" ]] && has_run=" (run.sh)"
+            echo "  $name$has_run"
+        done
+        ;;
+
+    run)
+        NAME="${2:-}"
+        [[ -z $NAME ]] && { echo "Usage: deck-app run <name>" >&2; exit 1; }
+        APP_DIR="$DECK_APPS_DIR/$NAME"
+        if [[ -f "$APP_DIR/run.sh" ]]; then
+            exec "$APP_DIR/run.sh"
+        elif [[ -f "$APP_DIR/run.py" ]]; then
+            exec python3 "$APP_DIR/run.py"
+        else
+            echo "No run.sh or run.py found in $APP_DIR" >&2
+            exit 1
+        fi
+        ;;
+
+    help|*)
+        usage
+        ;;
+esac
