@@ -20,7 +20,9 @@ One subfolder per app keeps things tidy.
   CLI (rich) + TUI (Textual) frontends. `./run.sh`. See `grimoire/README.md`.
 - **`security-suite/`** — your security/vault app. Encrypted vault with 2FA,
   password generation, breach checking. CLI (questionary) + TUI (Textual).
-  `./run.sh`. See `backend/vault.py`.
+  `run.sh` is a self-updating launcher (not the app itself) — first run
+  clones [Security-Suite](https://github.com/PyMite6941/Security-Suite),
+  later runs check for and offer to pull updates. See `security-suite/README.md`.
 - **`deck-gpio/`** — GPIO/I2C/SPI rapid prototyper. Pass a pin description and
   it auto-generates, runs, and debugs a Python test script for that layout.
   CLI (argparse). `./run.sh --map i2c 0x3c ssd1306`. See `deck-gpio/README.md`.

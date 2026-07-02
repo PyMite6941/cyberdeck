@@ -2,6 +2,28 @@
 
 Every addition/change to this project gets an entry: date, who (human or agent), what, why.
 
+## 2026-07-02 — Claude (security-suite: submodule → self-updating launcher)
+
+Replaced the `apps/security-suite` git submodule with a self-updating
+launcher script. Motivation: the submodule pinned an exact commit of
+`PyMite6941/Security-Suite` in this repo's history, so checking whether that
+pin was stale (or updating it) required cross-repo GitHub access this repo's
+sessions don't always have — the pin silently drifted out of sync with no
+easy way to notice.
+
+- **Removed**: `apps/security-suite` submodule entry (`.gitmodules`,
+  `.git/config`, the gitlink itself).
+- **Added `apps/security-suite/run.sh`** — thin launcher, not the app: first
+  run clones `Security-Suite` into `src/` (gitignored, a live clone the deck
+  manages); every later run fetches `origin`, and if there are new commits,
+  prints a one-line-per-commit summary and asks `Update now? [y/N]` before
+  launching (fast-forward only — never touches local edits in `src/`).
+  Non-interactive runs (no TTY) skip the check instead of blocking.
+- **Toggle**: `run.sh --check-updates=off` stops the prompt (persists in
+  `.check-updates`, gitignored); `--check-updates=on` resumes it.
+- **`apps/security-suite/README.md`** — documents the above.
+- **`apps/README.md`** / **`apps/.gitignore`** updated to match.
+
 ## 2026-07-02 — Claude (checklist/doc-sync review)
 
 Ran a review pass (security/permissions, shopping-list & BOM completeness,
