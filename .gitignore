@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# Secrets
+.env
+*.env
+
 # Databases and data artifacts
 *.db
 *.db-wal

@@ -48,6 +48,8 @@ One subfolder per app keeps things tidy.
   context sizes, measures tok/s/TTFT/RAM/temp deltas. Textual TUI. `./run.sh`.
 - **`deck-storage-bench/`** — storage benchmark suite. Tests SD/NVMe/USB/zram
   seq + 4K random, auto-recommends best device. Textual TUI. `./run.sh`.
+- **`deck-lib/`** — shared Python helpers (`db.py`, `ollama.py`, `pi_sensors.py`)
+  used by the `deck-*` apps above. Not a standalone app; no `run.sh`.
 
 ```
 apps/
@@ -65,6 +67,7 @@ apps/
 ├── deck-bootvis/       # boot time profiler (Textual TUI)
 ├── deck-ollama-profiler/ # LLM inference benchmark (Textual TUI)
 ├── deck-storage-bench/ # storage benchmark suite (Textual TUI)
+├── deck-lib/           # shared Python helpers (db, ollama, pi_sensors)
 ├── <your-next-app>/
 │   └── run.sh          # optional launch convention (below)
 ```

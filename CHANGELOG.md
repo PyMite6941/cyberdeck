@@ -2,6 +2,52 @@
 
 Every addition/change to this project gets an entry: date, who (human or agent), what, why.
 
+## 2026-07-02 — Claude (checklist/doc-sync review)
+
+Ran a review pass (security/permissions, shopping-list & BOM completeness,
+doc/tree sync) to catch anything the 2026-06-16 audit missed. Findings and fixes:
+
+- **`CHANGELOG.md`** — backfilled the missing entry for the 2026-06-16 audit-fixes
+  commit (added below), which had no changelog entry of its own.
+- **`apps/README.md`** — added the undocumented `apps/deck-lib/` shared-helpers
+  folder to the app list, tree, and roadmap.
+- **`SHOPPING.md`** — added a USB microphone line item (both checklists);
+  `apps/deck-whisper` records via PyAudio and had no mic anywhere in the parts
+  lists.
+- **`BOM.md`** — added the comms/radio subsystem (RTL-SDR, PN532, LoRa module,
+  Pi Pico, SMA antenna) that `SHOPPING.md` already priced but `BOM.md` omitted
+  entirely; added the microphone; clarified Y2M connector count (was ambiguous
+  "2 pairs" vs SHOPPING.md's "×2" — confirmed 2 units per BUILD-GUIDE).
+- **`.gitignore`** — added `.env`/`*.env` proactively (none currently tracked,
+  but nothing was excluding them either).
+- Verified clean, no action needed: file permissions (all scripts still
+  `+x`), no secrets or personal-machine paths committed, `os/security/*`
+  firewall/SSH/sysctl hardening still correct.
+- **Open item, not fixed**: `os/image/make_led_button.py`, `inspect_screenframe.py`,
+  and `inspect_buttons.py` still reference `Rigth screen frame.3mf` / `...rigth
+  retainer.3mf` as **input** filenames from the `hardware/` submodule (not
+  `Right`). Left alone because those paths must match the submodule's actual
+  filenames, which weren't checked out to verify — confirm against upstream
+  before renaming.
+
+## 2026-06-16 — Agent (post-publish audit fixes)
+
+Follow-up pass after making the repo public, cleaning up loose ends the
+initial commit left behind:
+
+- **Execute permissions restored** on `apps/_run_helper.sh`, every `apps/*/run.sh`,
+  and all scripts under `os/` that lost their `+x` bit on the initial commit
+  (`git add` on some platforms doesn't preserve the mode).
+- **`.gitattributes`**: added `*.stl binary` — STL exports were at risk of LF/CRLF
+  mangling like any other binary CAD format already covered (`.3mf`, `.step`).
+- **Personal path leakage scrubbed** from comments/docs (`AGENTS.md`,
+  `CHANGELOG.md`, `os/image/check_pi_clearance.py`, `inspect_rail.py`) — replaced
+  machine-specific OneDrive/Unicode-folder paths with generic descriptions now
+  that the repo is public.
+- **Typo fix**: `hardware-custom/Screen frame/Rigth screen frame with LED.*` →
+  `Right screen frame with LED.*`, and the corresponding export path in
+  `os/image/make_led_button.py`.
+
 ## 2026-06-16 — Agent (repo made public on GitHub)
 
 - **Root git repo initialised** — `git init`, root `.gitignore` covering
