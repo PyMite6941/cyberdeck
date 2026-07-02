@@ -2,6 +2,29 @@
 
 Every addition/change to this project gets an entry: date, who (human or agent), what, why.
 
+## 2026-07-02 — Claude (generalized vendor-app auto-update into `apps/_vendor_launcher.sh`)
+
+Extracted the clone/fetch/summarize/prompt logic just built for
+`security-suite/run.sh` into a shared, sourceable library,
+`apps/_vendor_launcher.sh` (mirrors the existing `apps/_run_helper.sh`
+pattern), so any future app whose real code lives in an external repo can
+reuse it instead of duplicating the script.
+
+- **`apps/_vendor_launcher.sh`** — new shared helper exposing `vendor_sync
+  <label> <repo-url> <src-dir> "$@"`: clone-on-first-run, fetch + prompt
+  with a change summary on later runs (interactive only, fast-forward
+  only), `--check-updates=on/off` toggle.
+- **`apps/security-suite/run.sh`** — rewritten to source the shared helper
+  instead of inlining the logic; behavior unchanged (re-verified against a
+  local fake-upstream repo: clone, decline, accept, toggle off/on).
+- **Docs**: `apps/README.md` gained a "Vendoring an external app" section;
+  `apps/security-suite/README.md` and `AGENTS.md` cross-reference it.
+- **Explicit scope note (per user request)**: this auto-update-check-and-
+  prompt pattern is an `apps/`-only convention. The `os/` layer is never
+  managed this way — it only changes when a human deliberately re-runs the
+  installer for an actual functionality or security update, never via a
+  background/automatic check.
+
 ## 2026-07-02 — Claude (security-suite: submodule → self-updating launcher)
 
 Replaced the `apps/security-suite` git submodule with a self-updating

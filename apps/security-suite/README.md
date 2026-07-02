@@ -7,7 +7,10 @@ This folder only holds a launcher (`run.sh`); it is **not** the app itself
 and is not a git submodule. That's on purpose — the previous submodule pin
 required this repo to be re-committed every time the vault app changed
 upstream, and checking whether the pin was stale needed cross-repo access
-this repo doesn't always have.
+this repo doesn't always have. The sync logic itself lives in the shared
+`apps/_vendor_launcher.sh` (see `apps/README.md` § "Vendoring an external
+app") so any future app that wraps an external repo can reuse it — this is
+an `apps/`-only convention; the `os/` layer is never auto-update-checked.
 
 ## How it works
 

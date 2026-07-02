@@ -109,8 +109,37 @@ echo "hello from the deck"
 
 Every app should offer at least a **CLI** interface (argparse, questionary, or
 rich). Apps with interactive workflows should also provide a **Textual TUI**
-full-screen interface. Both frontends live in `frontend/`; the launcher
-(`run.py`) offers the choice.
+full-screen interface.
+
+## Vendoring an external app (`_vendor_launcher.sh`)
+
+If an app's real code lives in someone else's git repo (not written here) —
+like `security-suite` — don't add it as a git submodule. Submodules pin an
+exact commit in *this* repo's history, so checking whether that pin is stale
+needs cross-repo access this repo doesn't always have.
+
+Instead, source `_vendor_launcher.sh` from the app's `run.sh`:
+
+```bash
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/../_vendor_launcher.sh"
+vendor_sync "myapp" "https://github.com/user/repo.git" "$DIR/src" "$@"
+exec "$DIR/src/run.sh" "$@"
+```
+
+`vendor_sync` clones the repo into `src/` (gitignore it) on first run; on
+every later run it fetches `origin` and, if there are new commits, prints a
+one-line-per-commit summary and asks `Update now? [y/N]` before
+fast-forwarding — never touching local edits, and skipping the check
+entirely on non-interactive runs (no TTY). `./run.sh --check-updates=off`
+(persisted in a gitignored `.check-updates` file) stops the prompt;
+`--check-updates=on` resumes it. See `security-suite/README.md` for a
+worked example.
+
+This convention is for `apps/` only — the `os/` layer is never
+auto-update-checked (see `AGENTS.md`).
+
+Both frontends live in `frontend/`; the launcher (`run.py`) offers the choice.
 
 ## Installing new apps
 
