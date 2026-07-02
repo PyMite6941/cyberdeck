@@ -3,14 +3,15 @@
 # cyberdeck "Committed Upgrades" (OPT-IN) — run after the base setup.sh:
 #   sudo ./setup-upgrades.sh
 #
-# Installs five upgrades. The three software ones work immediately; the two
-# hardware ones (RFID, LoRa) install their libraries + helper commands and
-# activate once you wire the part and uncomment the bus in config.txt.
+# Installs upgrades. Software ones work immediately; hardware ones need
+# the part wired and the bus uncommented in config.txt.
 #   1. Offline Ollama assistant 'DECK'  (pull base model + Modelfile persona)
 #   2. USB HID keyboard mode            (deck-hid)
 #   3. NAS file sharing over WiFi        (deck-nas, Samba)
 #   4. NFC/RFID reader helper            (deck-rfid, PN532 over I2C)
 #   5. LoRa radio helper                 (deck-lora, SX127x over SPI, AS923)
+#   6. Scroll-handle input daemon        (deck-scroll, rotary encoder)
+#   7. Biometric fingerprint scanner     (deck-biometric, GT-521F32/R307 UART)
 # Idempotent — safe to re-run.
 set -euo pipefail
 
@@ -110,6 +111,14 @@ chown -R "$DECK_USER:$DECK_USER" "$DECK_HOME/.config/systemd/user"
 # enable-linger keeps user services alive without an active session.
 loginctl enable-linger "$DECK_USER" 2>/dev/null || true
 
+echo "==> [7/7] Biometric fingerprint scanner (deck-biometric)"
+BIOMETRIC_DIR="$(dirname "$SCRIPT_DIR")/biometrics"
+if [[ -f "$BIOMETRIC_DIR/setup-biometrics.sh" ]]; then
+    bash "$BIOMETRIC_DIR/setup-biometrics.sh"
+else
+    echo "  ⚠ biometrics module not found — skipping"
+fi
+
 echo
 echo "Done. Live now (software):"
 echo "  deck-assistant                 offline AI persona"
@@ -119,4 +128,5 @@ echo "After wiring the hardware (uncomment in $CONFIG_TXT, reboot):"
 echo "  PN532 NFC (I2C):   deck-rfid read"
 echo "  LoRa SX127x (SPI): deck-lora recv     # 923 MHz, AS923 / Thailand"
 echo "  Scroll handle:     systemctl --user enable --now deck-scroll"
-echo "  NOTE: log out + back in (or reboot) for the 'input' group to take effect"
+echo "  Fingerprint scanner: deck-biometric enroll my-finger && deck-biometric verify"
+echo "  NOTE: log out + back in (or reboot) for the 'input' and 'dialout' groups to take effect"

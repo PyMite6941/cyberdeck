@@ -27,17 +27,23 @@ if command -v pcmanfm >/dev/null 2>&1; then
 fi
 
 echo "==> [2/4] Installing deck commands"
-install -m 755 "$SCRIPT_DIR/bin/deck-mode"    /usr/local/bin/deck-mode
-install -m 755 "$SCRIPT_DIR/bin/deck-vault"   /usr/local/bin/deck-vault
-install -m 755 "$SCRIPT_DIR/bin/deck-ide"     /usr/local/bin/deck-ide
-install -m 755 "$SCRIPT_DIR/bin/deck-desktop" /usr/local/bin/deck-desktop
-install -m 755 "$SCRIPT_DIR/bin/deck-app"     /usr/local/bin/deck-app
-install -m 755 "$SCRIPT_DIR/bin/deck-help"    /usr/local/bin/deck-help
-install -m 755 "$SCRIPT_DIR/bin/deck-check"   /usr/local/bin/deck-check
+install -m 755 "$SCRIPT_DIR/bin/deck-mode"      /usr/local/bin/deck-mode
+install -m 755 "$SCRIPT_DIR/bin/deck-vault"     /usr/local/bin/deck-vault
+install -m 755 "$SCRIPT_DIR/bin/deck-ide"       /usr/local/bin/deck-ide
+install -m 755 "$SCRIPT_DIR/bin/deck-desktop"   /usr/local/bin/deck-desktop
+install -m 755 "$SCRIPT_DIR/bin/deck-app"       /usr/local/bin/deck-app
+install -m 755 "$SCRIPT_DIR/bin/deck-help"      /usr/local/bin/deck-help
+install -m 755 "$SCRIPT_DIR/bin/deck-check"     /usr/local/bin/deck-check
+install -m 755 "$SCRIPT_DIR/bin/deck-settings"  /usr/local/bin/deck-settings
+# Deploy the deck-settings Python app to the staging lib directory.
+mkdir -p /opt/cyberdeck/lib/deck-settings
+if [[ -d "$SCRIPT_DIR/lib/deck-settings" ]]; then
+    cp -r "$SCRIPT_DIR/lib/deck-settings/"* /opt/cyberdeck/lib/deck-settings/
+fi
 dos2unix -q /usr/local/bin/deck-mode /usr/local/bin/deck-vault \
               /usr/local/bin/deck-ide /usr/local/bin/deck-desktop \
               /usr/local/bin/deck-app /usr/local/bin/deck-help \
-              /usr/local/bin/deck-check 2>/dev/null || true
+              /usr/local/bin/deck-check /usr/local/bin/deck-settings 2>/dev/null || true
 # mesa-utils provides glxinfo, used by deck-check to verify hardware GL.
 apt-get install -y --no-install-recommends mesa-utils 2>/dev/null || true
 
@@ -80,4 +86,5 @@ echo "  deck-desktop                    — restore the desktop after deck-ide"
 echo "  deck-app install|create|list|run — app manager (defaults to ~/apps/)"
 echo "  deck-help [section]              — comprehensive command reference"
 echo "  deck-check [--quiet]             — health check (GPU/zram/thermal/governor)"
+echo "  deck-settings                    — system configuration TUI (WiFi, storage, apps, system, security)"
 echo "Radio: plug in an RTL-SDR dongle, then:  rtl_fm -f 99.9M -M wbfm | aplay  (or gqrx)"

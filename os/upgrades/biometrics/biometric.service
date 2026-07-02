@@ -1,0 +1,15 @@
+[Unit]
+Description=cyberdeck biometric fingerprint daemon
+Documentation=https://github.com/ArcticEnrichmentCenter/DFCD-cyberdeck-files
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/deck-biometric status
+ExecStop=/bin/true
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

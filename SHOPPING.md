@@ -37,6 +37,8 @@ Exact upstream product links: `hardware/Hardware list.md`. Specs rationale:
 - [ ] PN532 NFC/RFID module (I2C) — ~$5 *(optional, deck-rfid or comms module)*
 - [ ] LoRa module **AS923 / 920–925 MHz** (RFM95W-class, SX1276) — ~$12 *(optional, deck-lora or comms module; AS923 is the Thailand-legal band — not US 915 / EU 868)*
 - [ ] Raspberry Pi Pico (RP2040) — ~$4 *(optional, comms-module USB bridge)*
+- [ ] GT-521F32 optical fingerprint scanner — ~$20–30 *(optional, deck-biometric)*
+- [ ] R307 / R503 fingerprint scanner (compatible alternative) — ~$12–18 *(optional, deck-biometric)*
 - [ ] SMA pigtail + 915/923 MHz whip antenna — ~$3 *(optional, comms-module LoRa)*
 
 ### Mechanical
@@ -81,6 +83,8 @@ markup.*
 - [ ] PN532 NFC/RFID module (I2C) — ~฿180–250 *(optional, deck-rfid or comms module)*
 - [ ] LoRa module **AS923 / 920–925 MHz** (RFM95W-class) — ~฿430–600 *(optional, deck-lora or comms module; AS923 = legal band in Thailand — confirm freq with seller)*
 - [ ] Raspberry Pi Pico (RP2040) — ~฿70–120 *(optional, comms-module USB bridge)*
+- [ ] GT-521F32 fingerprint scanner — ~฿700–1,100 *(optional, deck-biometric)*
+- [ ] R307 / R503 fingerprint scanner (compatible alternative) — ~฿450–650 *(optional, deck-biometric)*
 - [ ] SMA pigtail + whip antenna — ~฿100–180 *(optional, comms-module LoRa)*
 
 ### Mechanical

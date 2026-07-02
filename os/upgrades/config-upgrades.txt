@@ -12,4 +12,9 @@
 
 # LoRa — SX127x/RFM9x over SPI0 (SCK=11 MOSI=10 MISO=9 CS=CE1/GPIO7 RST=GPIO25):
 #dtparam=spi=on
+
+# Biometric fingerprint scanner — GT-521F32 / R307 / R503 (UART).
+# Wiring: VCC→3.3V, GND→GND, TX→GPIO15(RX), RX→GPIO14(TX)
+#enable_uart=1
+#dtoverlay=disable-bt  # optional: frees UART from Bluetooth
 # --- END CYBERDECK-UPGRADES ---

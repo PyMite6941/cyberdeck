@@ -57,11 +57,12 @@ show_modes() {
 
 show_system() {
     section "System Commands"
-    cmd "deck-ide"     "Headless IDE (drops desktop, tmux + Neovim + Claude)" "deck-ide"
-    cmd "deck-desktop" "Restore desktop after deck-ide"                       "deck-desktop"
-    cmd "deck-check"   "Health check (GPU/zram/thermal/governor)"            "deck-check [--quiet]"
-    cmd "deck-scroll"  "Scroll-handle daemon (encoder → zoom/volume)"        "systemctl --user start deck-scroll"
-    cmd "deck-help"    "Show this help"                                       "deck-help [section]"
+    cmd "deck-ide"       "Headless IDE (drops desktop, tmux + Neovim + Claude)" "deck-ide"
+    cmd "deck-desktop"   "Restore desktop after deck-ide"                       "deck-desktop"
+    cmd "deck-check"     "Health check (GPU/zram/thermal/governor)"            "deck-check [--quiet]"
+    cmd "deck-scroll"    "Scroll-handle daemon (encoder → zoom/volume)"        "systemctl --user start deck-scroll"
+    cmd "deck-settings"  "System configuration TUI (WiFi, storage, apps)"      "deck-settings"
+    cmd "deck-help"      "Show this help"                                       "deck-help [section]"
 }
 
 show_storage() {

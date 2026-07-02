@@ -48,6 +48,9 @@ One subfolder per app keeps things tidy.
   context sizes, measures tok/s/TTFT/RAM/temp deltas. Textual TUI. `./run.sh`.
 - **`deck-storage-bench/`** — storage benchmark suite. Tests SD/NVMe/USB/zram
   seq + 4K random, auto-recommends best device. Textual TUI. `./run.sh`.
+- **`deck-settings/`** — unified system configuration TUI. Network & WiFi scanning,
+  storage usage, app listing, CPU governor switching, display modes, deck-vault,
+  fingerprint biometrics, SSH/firewall status, system info. Textual TUI. `./run.sh`.
 
 ```
 apps/
@@ -65,6 +68,7 @@ apps/
 ├── deck-bootvis/       # boot time profiler (Textual TUI)
 ├── deck-ollama-profiler/ # LLM inference benchmark (Textual TUI)
 ├── deck-storage-bench/ # storage benchmark suite (Textual TUI)
+├── deck-settings/      # system configuration TUI (Textual TUI)
 ├── <your-next-app>/
 │   └── run.sh          # optional launch convention (below)
 ```
@@ -88,6 +92,7 @@ code-automation. Three high-value tools live or are planned here:
 | **deck-bootvis** | `apps/deck-bootvis/` ✅ | Boot time profiler — systemd-analyze parser, history tracking, optimization suggestions. Textual TUI. |
 | **deck-ollama-profiler** | `apps/deck-ollama-profiler/` ✅ | LLM inference benchmark — tests models at 5 context sizes, measures tok/s/TTFT/RAM/temp. Textual TUI. |
 | **deck-storage-bench** | `apps/deck-storage-bench/` ✅ | Storage benchmark — SD/NVMe/USB/zram speed tests, auto-recommends best device. Textual TUI. |
+| **deck-settings** | `apps/deck-settings/` ✅ | Unified system configuration TUI — WiFi scanning, storage, apps, CPU governor, display mode, vault, biometrics, SSH, firewall, system info. |
 | **deck-ide** | `os/extras/bin/deck-ide` ✅ | Headless IDE mode — drops console, kills the display manager (~2 GB freed), fires up tmux with Neovim + Claude Code + htop split. `deck-desktop` restores the GUI. |
 | **deck-dashboard** | `apps/deck-dashboard/` ✅ | Real-time system monitor TUI (Textual): CPU temp, RAM/swap, disk, network, top processes. |
 

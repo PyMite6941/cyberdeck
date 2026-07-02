@@ -1,14 +1,14 @@
 # Committed Upgrades layer (`os/upgrades/`)
 
-Five opt-in upgrades, installed by one script after the base `setup.sh`:
+Seven opt-in upgrades, installed by one script after the base `setup.sh`:
 
 ```bash
 sudo ./setup-upgrades.sh
 ```
 
-Three are pure software (work the moment the script finishes); two need a cheap
-part (~$17 total) and activate once you wire it and uncomment the bus in
-`config.txt`. All idempotent, Pi 4B+ compatible, LF endings.
+Most are pure software (work the moment the script finishes); hardware ones
+need a cheap part wired and a bus uncommented in `config.txt`. All idempotent,
+Pi 4B+ compatible, LF endings.
 
 | # | Upgrade | Command | Needs |
 |---|---|---|---|
@@ -18,6 +18,7 @@ part (~$17 total) and activate once you wire it and uncomment the bus in
 | 4 | NFC/RFID reader (direct-wire) | `deck-rfid` | PN532 (~$5) |
 | 5 | LoRa radio (direct-wire) | `deck-lora` | SX127x AS923 (~$12) |
 | 6 | **Comms module** (NFC + LoRa, hot-swap) | `deck-comms` | PN532 + LoRa + Pico (~$21) |
+| 7 | **Biometric fingerprint scanner** | `deck-biometric` | GT-521F32 / R307 (~$15–30) |
 
 **Two ways to add NFC/LoRa:** wire the parts straight to the Pi's GPIO header
 (`deck-rfid` / `deck-lora`, simplest), **or** build the removable
@@ -104,7 +105,35 @@ DECK_LORA_FREQ=868.0 deck-lora recv     # override band if you must
 | `bin/deck-nas` | Samba share control |
 | `bin/deck-rfid` | PN532 NFC reader (venv Python over I2C) |
 | `bin/deck-lora` | SX127x LoRa send/recv (venv Python over SPI, AS923) |
-| `config-upgrades.txt` | commented `dwc2`/`i2c`/`spi` enables appended to config.txt |
+| `config-upgrades.txt` | commented `dwc2`/`i2c`/`spi`/`uart` enables appended to config.txt |
+| `biometrics/bin/deck-biometric` | GT-521F32/R307 fingerprint scanner driver |
+| `biometrics/setup-biometrics.sh` | Installs fingerprint scanner support |
+| `biometrics/biometric.service` | systemd unit (optional) |
+| `biometrics/README.md` | Biometrics hardware wiring + usage docs |
 
-Python for the two hardware helpers lives in a venv at `/opt/cyberdeck/venv`
+## 6. Biometric fingerprint scanner — `deck-biometric`
+
+GT-521F32 / R307 / R503 optical fingerprint scanner over **UART**. The scanner
+stores templates on-device (they never leave the module); the deck keeps a
+local name→ID mapping in `~/.deck-biometric/enrollments.json`.
+
+| Wiring | Pi GPIO |
+|---|---|
+| VCC | 3.3V (pin 1) |
+| GND | GND (pin 6) |
+| TX | RX/GPIO15 (pin 10) |
+| RX | TX/GPIO14 (pin 8) |
+
+```bash
+deck-biometric status                  # sensor info
+deck-biometric enroll my-finger        # register a finger
+deck-biometric verify                  # scan and check
+deck-biometric vault-open              # scan → unlock deck-vault
+```
+
+Uncomment `enable_uart=1` in config.txt and reboot. Full docs in
+`biometrics/README.md`.
+
+
+Python for the hardware helpers lives in a venv at `/opt/cyberdeck/venv`
 (Bookworm is externally-managed, so a venv is required — not system pip).

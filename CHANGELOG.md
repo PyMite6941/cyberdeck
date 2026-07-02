@@ -2,6 +2,69 @@
 
 Every addition/change to this project gets an entry: date, who (human or agent), what, why.
 
+## 2026-07-01 — Agent (deck-settings: unified system configuration TUI)
+
+**New `apps/deck-settings/`** — full-featured Textual TUI for managing every
+aspect of the deck:
+- **Network & WiFi** — scan visible networks, check connection status and IP
+- **Storage** — disk usage, zram compression stats, mount points
+- **Apps** — list installed project apps with launcher availability
+- **System** — hostname, per-core CPU governor switching (P/O/S/C keys),
+  display mode (calls deck-mode), uptime & temperature
+- **Security** — deck-vault status/open/close, fingerprint scanner status,
+  SSH service + configuration status, UFW firewall status
+- **About** — Pi model, kernel, OS version, memory, disk, temp, uptime
+
+**New `os/extras/bin/deck-settings`** — launcher that auto-deploys the app on
+first run from `/opt/cyberdeck/lib/deck-settings/` to `~/.local/share/deck-settings/`.
+Installs textual if missing.
+
+**New `os/extras/lib/deck-settings/deck-settings.py`** — the Textual app source,
+deployed by setup-extras.sh to the staging lib directory so it's included in the
+bootable SD card image via the `inject-to-sd.ps1` pipeline.
+
+**Modified `os/extras/setup-extras.sh`** — installs deck-settings command +
+copies lib. Updated "Done" summary.
+
+**Modified `os/extras/bin/deck-help`** — added deck-settings to System Commands
+section.
+
+**Modified `apps/README.md`** — added deck-settings to the app listing, directory
+tree, and roadmap table.
+
+## 2026-07-01 — Agent (biometric fingerprint scanner support)
+
+**New `os/upgrades/biometrics/`** — opt-in biometric authentication layer:
+- `bin/deck-biometric` — GT-521F32 / R307 / R503 UART fingerprint scanner driver
+  with enroll/verify/identify/list/delete/clear/vault-open commands. Implements
+  the FPS_GEN2 protocol over pyserial, stores templates on-sensor (never leaves
+  the module), keeps local name→ID mapping in `~/.deck-biometric/enrollments.json`.
+  `vault-open` integrates with deck-vault for fingerprint-based unlock.
+- `setup-biometrics.sh` — installs pyserial, deploys command, adds user to
+  `dialout` group, appends commented `enable_uart=1` to config.txt.
+- `biometric.service` — optional systemd oneshot unit for boot-time status.
+- `README.md` — hardware wiring (VCC→3.3V, GND→GND, TX→GPIO15, RX→GPIO14),
+  commands, vault integration, security notes.
+
+**Hardware CAD** `hardware-custom/Biometrics/make_fingerprint_mount.py` —
+parametric FreeCAD generator for a 3D-printed scanner bracket, supporting
+GT-521F32 and R307 footprints with M2 screw bosses and deck mounting holes.
+
+**Modified `os/upgrades/setup-upgrades.sh`** — added step [7/7] calling
+biometrics sub-installer. Header updated to list all 7 upgrades.
+
+**Modified `os/upgrades/config-upgrades.txt`** — added commented UART enable
+lines for the fingerprint scanner under `# --- CYBERDECK-BIOMETRICS ---`.
+
+**Modified `os/upgrades/README.md`** — added biometrics to the upgrade table,
+new section 6 with wiring table and commands, Files table updated.
+
+**Modified `SHOPPING.md`** — added GT-521F32 (~$20–30) and R307 (~$12–18) to
+both Amazon and Shopee/Lazada checklists.
+
+**Modified `BOM.md`** — added "Biometrics add-on" section with scanner picks,
+mounting notes, and threat-model disclaimer (convenience, not high-security).
+
 ## 2026-06-16 — Agent (repo made public on GitHub)
 
 - **Root git repo initialised** — `git init`, root `.gitignore` covering

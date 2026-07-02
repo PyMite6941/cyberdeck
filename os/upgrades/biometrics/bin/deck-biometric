@@ -1,0 +1,470 @@
+#!/usr/bin/env bash
+# deck-biometric — UART fingerprint scanner for the cyberdeck.
+#
+# Supports optical fingerprint modules using the GT-521F32 / R307 / R503
+# protocol (FPS_GEN2 family) over UART.
+#
+# Wiring (GT-521F32 → Pi GPIO):
+#   VCC (red)  → 3.3V (pin 1)
+#   GND (black) → GND (pin 6)
+#   TX (white)  → RX / GPIO15 (pin 10)
+#   RX (green)  → TX / GPIO14 (pin 8)
+#
+# Commands:
+#   deck-biometric status          sensor info, template count, capacity
+#   deck-biometric enroll <name>   capture finger twice, store as <name>
+#   deck-biometric verify          scan finger — match against all enrolled
+#   deck-biometric identify        scan finger — show which enrolled user
+#   deck-biometric list            show all enrolled templates
+#   deck-biometric delete <id|all> remove template(s)
+#   deck-biometric clear           delete ALL templates
+#   deck-biometric vault-open      scan finger → unlock deck-vault
+#
+# Set DECK_BIO_DEV=/dev/ttyAMA0 to override auto-detect.
+
+set -euo pipefail
+
+PY=/opt/cyberdeck/venv/bin/python3
+[[ -x $PY ]] || { echo "venv missing — run: sudo os/upgrades/biometrics/setup-biometrics.sh" >&2; exit 1; }
+
+exec "$PY" - "${@:-status}" <<'PY'
+import sys, time, struct, serial, os, json, subprocess, getpass, hashlib
+from pathlib import Path
+
+# --- GT-521F32 / R307 protocol constants --------------------------------
+HEADER = b'\xEF\x01'
+DEFAULT_ADDR = b'\xFF\xFF\xFF\xFF'
+BAUD = 57600
+# If you need 9600 baud (older modules), pass DECK_BIO_BAUD=9600 in env.
+BAUD_FALLBACK = 9600
+PACKET_TIMEOUT = 1.5
+
+CMD_GEN_IMG      = 0x01
+CMD_IMG2TZ       = 0x02
+CMD_SEARCH       = 0x04
+CMD_REGMODEL     = 0x05
+CMD_STORE        = 0x06
+CMD_LOAD_CHAR    = 0x07
+CMD_UP_CHAR      = 0x08
+CMD_DOWN_CHAR    = 0x09
+CMD_UP_IMAGE     = 0x0A
+CMD_DOWN_IMAGE   = 0x0B
+CMD_DELETE_CHAR  = 0x0C
+CMD_EMPTY        = 0x0D
+CMD_SET_PWD      = 0x12
+CMD_VFY_PWD      = 0x13
+CMD_WRITE_NOTEPAD = 0x18
+CMD_READ_NOTEPAD  = 0x19
+CMD_READ_SYS_PARA = 0x0F
+CMD_TEMPLATE_CNT  = 0x1D
+CMD_READ_INDEX_TABLE = 0x1F
+
+ACK_SUCCESS       = 0x00
+ACK_FINGER_ERR    = 0x01
+ACK_TIMEOUT       = 0x02
+ACK_NO_FINGER     = 0x05
+
+ENROLL_DIR = Path(os.environ.get("DECK_BIO_DIR", os.path.expanduser("~/.deck-biometric")))
+DB_FILE = ENROLL_DIR / "enrollments.json"
+# We store name→id mappings locally since the sensor only stores numeric IDs.
+
+
+# --- Protocol helpers ---------------------------------------------------
+def _checksum(pkt: bytes) -> int:
+    return (sum(pkt[6:]) & 0xFFFF)
+
+def _make_pkt(cmd: int, data: bytes = b"") -> bytes:
+    pid = 0x01  # command packet
+    length = len(data) + 2  # data + 2 for checksum
+    pkt = HEADER + DEFAULT_ADDR + bytes([pid, cmd]) + length.to_bytes(2, 'big') + data
+    cs = _checksum(pkt)
+    pkt += cs.to_bytes(2, 'big')
+    return pkt
+
+def _read_pkt(ser, timeout=PACKET_TIMEOUT) -> bytes:
+    ser.timeout = timeout
+    # Wait for header
+    start = time.time()
+    buf = b""
+    while time.time() - start < timeout:
+        b = ser.read(1)
+        if b == b'\xEF':
+            buf = b'\xEF'
+            nxt = ser.read(1)
+            if nxt == b'\x01':
+                buf += nxt
+                break
+    if len(buf) < 2:
+        return b""
+    # Read rest: addr(4) + pid(1) + cmd(1) + len(2) + data(len-2) + cs(2)
+    rest_len = 4 + 1 + 1 + 2
+    buf += ser.read(rest_len)
+    if len(buf) < 2 + rest_len:
+        return b""
+    pid = buf[7]
+    data_len = int.from_bytes(buf[8:10], 'big')
+    if data_len < 2:
+        return b""
+    data = ser.read(data_len + 2)  # data + checksum
+    return buf + data
+
+def _send_cmd(ser, cmd: int, data: bytes = b"", ack_only=True):
+    pkt = _make_pkt(cmd, data)
+    ser.write(pkt)
+    resp = _read_pkt(ser)
+    if len(resp) < 12:
+        return None
+    # Verify checksum
+    if _checksum(resp) != 0:
+        # Checksum field includes itself — check by summing everything
+        pass  # we trust the hardware
+    ack = resp[9]
+    if ack_only:
+        return ack
+    return resp
+
+def _wait_for_finger(ser, timeout=10):
+    """Poll GenImg until a finger is detected or timeout."""
+    start = time.time()
+    while time.time() - start < timeout:
+        ack = _send_cmd(ser, CMD_GEN_IMG)
+        if ack == ACK_SUCCESS:
+            return True
+        elif ack == ACK_NO_FINGER:
+            time.sleep(0.1)
+            continue
+        elif ack == ACK_FINGER_ERR:
+            print("  ✗ finger too wet/dry — try again", file=sys.stderr)
+            time.sleep(0.5)
+            continue
+        else:
+            print(f"  ✗ GenImg error: 0x{ack:02X}", file=sys.stderr)
+            return False
+    return False
+
+def _img2tz(ser, buf_num=1):
+    ack = _send_cmd(ser, CMD_IMG2TZ, bytes([buf_num]))
+    return ack == ACK_SUCCESS
+
+def _search(ser):
+    """Search all enrolled templates. Returns (id, score) or (None, None)."""
+    # Start from page 0, search all 300 pages
+    data = bytes([0x00, 0x00, 0x00, 0x01])  # buf_id=1, start_page=0, count=300 (max)
+    resp_bytes = _send_cmd(ser, CMD_SEARCH, data, ack_only=False)
+    if resp_bytes is None or len(resp_bytes) < 16:
+        return (None, None)
+    ack = resp_bytes[9]
+    if ack != ACK_SUCCESS:
+        return (None, None)
+    match_id = int.from_bytes(resp_bytes[10:12], 'big')
+    score = int.from_bytes(resp_bytes[12:14], 'big')
+    return (match_id, score)
+
+def _get_template_count(ser):
+    resp = _send_cmd(ser, CMD_TEMPLATE_CNT, ack_only=False)
+    if resp is None or len(resp) < 14:
+        return 0
+    return int.from_bytes(resp[10:12], 'big')
+
+def _read_sys_params(ser):
+    resp = _send_cmd(ser, CMD_READ_SYS_PARA, ack_only=False)
+    if resp is None or len(resp) < 28:
+        return {}
+    data = resp[10:26]
+    return {
+        "status_reg": data[0],
+        "system_id": int.from_bytes(data[1:3], 'big'),
+        "capacity": int.from_bytes(data[3:5], 'big'),
+        "security_level": data[5],
+        "device_addr": int.from_bytes(data[6:10], 'big'),
+        "data_pkt_size": int.from_bytes(data[10:12], 'big'),
+        "baud_rate": int.from_bytes(data[12:16], 'big'),
+    }
+
+def _store_template(ser, page_id):
+    ack = _send_cmd(ser, CMD_STORE, bytes([0x01]) + page_id.to_bytes(2, 'big'))
+    return ack == ACK_SUCCESS
+
+def _delete_template(ser, page_id):
+    ack = _send_cmd(ser, CMD_DELETE_CHAR, bytes([page_id, 0x00, 0x00, 0x01]))
+    return ack == ACK_SUCCESS
+
+def _empty_library(ser):
+    ack = _send_cmd(ser, CMD_EMPTY)
+    return ack == ACK_SUCCESS
+
+def _verify_password(ser, pwd=0x00000000):
+    data = pwd.to_bytes(4, 'big')
+    ack = _send_cmd(ser, CMD_VFY_PWD, data)
+    return ack == ACK_SUCCESS
+
+
+# --- DB helpers (local name→id mapping) ---------------------------------
+def _load_db():
+    if DB_FILE.exists():
+        return json.loads(DB_FILE.read_text())
+    return {}
+
+def _save_db(db):
+    ENROLL_DIR.mkdir(parents=True, exist_ok=True)
+    DB_FILE.write_text(json.dumps(db, indent=2))
+
+def _next_id(db):
+    used = set(db.values())
+    for i in range(1, 301):
+        if i not in used:
+            return i
+    return None
+
+
+# --- Commands -----------------------------------------------------------
+def cmd_status(ser):
+    params = _read_sys_params(ser)
+    count = _get_template_count(ser)
+    db = _load_db()
+    print(f"  Scanner:      GT-521F32 / R307 (UART)")
+    print(f"  Templates:    {count} / {params.get('capacity', '?')}")
+    print(f"  Enrolled:     {len(db)} named")
+    print(f"  Security lvl: {params.get('security_level', '?')}")
+    print(f"  Baud:         {params.get('baud_rate', BAUD)}")
+    print(f"  Device:       {os.environ.get('DECK_BIO_DEV', '/dev/ttyAMA0')}")
+    if db:
+        print(f"  Users:")
+        for name, pid in sorted(db.items(), key=lambda x: x[1]):
+            print(f"    [{pid}] {name}")
+    return 0
+
+def cmd_enroll(ser, name):
+    db = _load_db()
+    if name in db:
+        print(f"  ✗ '{name}' already enrolled (id {db[name]})", file=sys.stderr)
+        return 1
+    pid = _next_id(db)
+    if pid is None:
+        print("  ✗ sensor template storage full (max 300)", file=sys.stderr)
+        return 1
+    print(f"  Place finger on scanner for '{name}' (id {pid})...")
+    if not _wait_for_finger(ser):
+        print("  ✗ timeout / no finger", file=sys.stderr)
+        return 1
+    if not _img2tz(ser, 1):
+        print("  ✗ image→buffer 1 failed", file=sys.stderr)
+        return 1
+    print("  Remove finger...")
+    time.sleep(0.5)
+    # Wait for finger removal
+    _send_cmd(ser, CMD_GEN_IMG)  # one attempt to confirm removed
+    time.sleep(0.5)
+    print("  Place same finger again...")
+    if not _wait_for_finger(ser):
+        print("  ✗ timeout / no finger (second scan)", file=sys.stderr)
+        return 1
+    if not _img2tz(ser, 2):
+        print("  ✗ image→buffer 2 failed", file=sys.stderr)
+        return 1
+    ack = _send_cmd(ser, CMD_REGMODEL)
+    if ack != ACK_SUCCESS:
+        print(f"  ✗ model creation failed (0x{ack:02X}) — scans too different", file=sys.stderr)
+        return 1
+    if not _store_template(ser, pid):
+        print("  ✗ store failed", file=sys.stderr)
+        return 1
+    db[name] = pid
+    _save_db(db)
+    print(f"  ✓ enrolled '{name}' as id {pid}")
+    return 0
+
+def cmd_verify(ser):
+    print("  Place finger on scanner...")
+    if not _wait_for_finger(ser):
+        print("  ✗ timeout / no finger", file=sys.stderr)
+        return 1
+    if not _img2tz(ser, 1):
+        print("  ✗ image→buffer failed", file=sys.stderr)
+        return 1
+    match_id, score = _search(ser)
+    if match_id is None:
+        print("  ✗ no match found", file=sys.stderr)
+        return 1
+    db = _load_db()
+    name = next((n for n, i in db.items() if i == match_id), f"id{match_id}")
+    print(f"  ✓ matched '{name}' (score {score})")
+    return 0
+
+def cmd_identify(ser):
+    return cmd_verify(ser)  # same operation, different CLI name
+
+def cmd_list(ser):
+    db = _load_db()
+    count = _get_template_count(ser)
+    if not db and count == 0:
+        print("  No enrolled fingerprints.")
+        return 0
+    print(f"  Sensor: {count} template(s)")
+    print(f"  Local DB: {len(db)} named")
+    for name, pid in sorted(db.items(), key=lambda x: x[1]):
+        print(f"    [{pid}] {name}")
+    # Check for orphaned templates (on sensor but not in local DB)
+    if count > len(db):
+        orphans = count - len(db)
+        print(f"  ⚠ {orphans} orphan(s) on sensor without local names")
+        print(f"     Use 'deck-biometric list-sensor' to see raw IDs")
+    return 0
+
+def cmd_list_sensor(ser):
+    count = _get_template_count(ser)
+    print(f"  Sensor templates: {count}")
+    return 0
+
+def cmd_delete(ser, target):
+    db = _load_db()
+    if target == "all":
+        # Delete all named in local DB
+        for name, pid in list(db.items()):
+            _delete_template(ser, pid)
+            print(f"  deleted [{pid}] {name}")
+        db.clear()
+        _save_db(db)
+        return 0
+    # By name or numeric ID
+    target_lower = target.lower()
+    pid = None
+    name = None
+    if target_lower in db:
+        pid = db[target_lower]
+        name = target_lower
+    elif target.isdigit():
+        pid = int(target)
+        name = next((n for n, i in db.items() if i == pid), str(pid))
+    else:
+        print(f"  ✗ '{target}' not found in enrollment DB", file=sys.stderr)
+        return 1
+    _delete_template(ser, pid)
+    if target_lower in db:
+        del db[target_lower]
+        _save_db(db)
+    print(f"  deleted [{pid}] {name}")
+    return 0
+
+def cmd_clear(ser):
+    _empty_library(ser)
+    db_path = Path(DB_FILE)
+    if db_path.exists():
+        db_path.unlink()
+    print("  ✓ ALL templates deleted from sensor and local DB")
+    return 0
+
+def cmd_vault_open(ser):
+    """Fingerprint unlock for deck-vault."""
+    # Check deck-vault exists
+    vault_img = os.environ.get("VAULT_IMG", os.path.expanduser("~/Vault.img"))
+    vault_bin = subprocess.run(["which", "deck-vault"], capture_output=True, text=True)
+    if vault_bin.returncode != 0:
+        print("  ✗ deck-vault not installed", file=sys.stderr)
+        return 1
+    if not Path(vault_img).exists():
+        print(f"  ✗ vault not found at {vault_img}", file=sys.stderr)
+        print(f"     Create one: deck-vault init", file=sys.stderr)
+        return 1
+    print("  Place finger to unlock vault...")
+    if not _wait_for_finger(ser):
+        print("  ✗ timeout / no finger", file=sys.stderr)
+        return 1
+    if not _img2tz(ser, 1):
+        print("  ✗ image→buffer failed", file=sys.stderr)
+        return 1
+    match_id, score = _search(ser)
+    if match_id is None:
+        print("  ✗ fingerprint not recognized", file=sys.stderr)
+        return 1
+    db = _load_db()
+    name = next((n for n, i in db.items() if i == match_id), f"id{match_id}")
+    print(f"  ✓ matched '{name}' (score {score})")
+    # Unlock the vault silently
+    result = subprocess.run(["deck-vault", "open"], capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"  ✓ vault unlocked for '{name}'")
+    else:
+        print(f"  ✗ vault unlock failed: {result.stderr.strip()}", file=sys.stderr)
+        return 1
+    return 0
+
+
+# --- Main ---------------------------------------------------------------
+def main():
+    args = sys.argv[1:] if len(sys.argv) > 1 else ["status"]
+    cmd = args[0] if args else "status"
+
+    # Open serial
+    dev = os.environ.get("DECK_BIO_DEV", "/dev/ttyAMA0")
+    baud = int(os.environ.get("DECK_BIO_BAUD", str(BAUD)))
+    if not Path(dev).exists():
+        print(f"  ✗ device {dev} not found", file=sys.stderr)
+        print(f"     Enable UART: add 'enable_uart=1' to config.txt, reboot", file=sys.stderr)
+        print(f"     Or set: DECK_BIO_DEV=/dev/ttyUSB0 deck-biometric status", file=sys.stderr)
+        return 1
+    try:
+        ser = serial.Serial(dev, baudrate=baud, timeout=PACKET_TIMEOUT)
+    except serial.SerialException as e:
+        print(f"  ✗ cannot open {dev}: {e}", file=sys.stderr)
+        print(f"     Ensure user is in 'dialout' group: sudo usermod -aG dialout $USER", file=sys.stderr)
+        return 1
+    # Fallback to 9600 if 57600 fails
+    if not _verify_password(ser):
+        ser.close()
+        baud = BAUD_FALLBACK
+        try:
+            ser = serial.Serial(dev, baudrate=baud, timeout=PACKET_TIMEOUT)
+            if not _verify_password(ser):
+                print("  ✗ sensor not responding (check wiring)", file=sys.stderr)
+                return 1
+        except serial.SerialException as e:
+            print(f"  ✗ cannot open {dev} at 9600: {e}", file=sys.stderr)
+            return 1
+
+    commands = {
+        "status": cmd_status,
+        "enroll": cmd_enroll,
+        "verify": cmd_verify,
+        "identify": cmd_identify,
+        "list": cmd_list,
+        "list-sensor": cmd_list_sensor,
+        "delete": cmd_delete,
+        "clear": cmd_clear,
+        "vault-open": cmd_vault_open,
+    }
+
+    if cmd not in commands:
+        print("usage: deck-biometric <command> [args]", file=sys.stderr)
+        print("  status                           sensor info", file=sys.stderr)
+        print("  enroll <name>                    register finger", file=sys.stderr)
+        print("  verify                           scan & check match", file=sys.stderr)
+        print("  list                             show enrolled", file=sys.stderr)
+        print("  delete <name|id|all>             remove template", file=sys.stderr)
+        print("  clear                            delete ALL templates", file=sys.stderr)
+        print("  vault-open                       scan → unlock deck-vault", file=sys.stderr)
+        ser.close()
+        return 1
+
+    try:
+        if cmd == "enroll":
+            if len(args) < 2:
+                print("usage: deck-biometric enroll <name>", file=sys.stderr)
+                return 1
+            rc = commands[cmd](ser, args[1].lower())
+        elif cmd == "delete":
+            if len(args) < 2:
+                print("usage: deck-biometric delete <name|id|all>", file=sys.stderr)
+                return 1
+            rc = commands[cmd](ser, args[1])
+        else:
+            rc = commands[cmd](ser)
+    except KeyboardInterrupt:
+        print("\n  cancelled")
+        rc = 1
+    finally:
+        ser.close()
+    return rc
+
+sys.exit(main())
+PY

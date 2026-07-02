@@ -56,6 +56,19 @@ accelerator for the Pi; the CPU does the work.
 sessions. Claude Code itself is cloud-hosted and runs perfectly on either Pi;
 local models are the offline fallback.
 
+## Biometrics add-on (optional — for fingerprint auth, see `os/upgrades/biometrics/`)
+
+| Role | Best pick | Why | Est. price |
+|---|---|---|---|
+| Fingerprint scanner | **GT-521F32** | 192×192 dpi, UART, 200+ template capacity, 57600 baud; well-supported protocol | ~$20–30 |
+| Budget alternative | **R307 / R503** | Same protocol, often 9600 baud; R503 has a blue-ring indicator LED | ~$12–18 |
+| Scanner mounting | 3D-printed bracket (BTF-format sensor well) | Keeps sensor flush with the deck body; M2 screw holes for the scanner PCB | ~$0.50 filament |
+
+**Note:** optical fingerprint scanners can be fooled by a well-made silicone
+cast — they are a convenience unlock, not a high-security authenticator. For
+the deck's threat model (physical theft of the device), the fingerprint gate
+on `deck-vault` adds meaningful friction without slowing daily use.
+
 ## Consumables
 
 | Item | Est. price |

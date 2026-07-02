@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# deck-settings — system configuration TUI (Textual)
+# Shows and controls WiFi, storage, apps, CPU governor, display mode,
+# deck-vault, fingerprint scanner, SSH, firewall, and system info.
+set -euo pipefail
+
+APP_SRC="/opt/cyberdeck/lib/deck-settings"
+APP_DST="${XDG_DATA_HOME:-$HOME/.local/share}/deck-settings"
+PY="${PYTHON:-python3}"
+
+# Deploy on first run.
+if [[ ! -f "$APP_DST/deck-settings.py" ]]; then
+    mkdir -p "$APP_DST"
+    if [[ -d "$APP_SRC" ]]; then
+        cp -r "$APP_SRC/"* "$APP_DST/"
+    else
+        echo "deck-settings source not found at $APP_SRC" >&2
+        echo "Re-run: sudo setup-extras.sh" >&2
+        exit 1
+    fi
+    # Ensure textual is available.
+    if ! "$PY" -c "import textual" 2>/dev/null; then
+        pip3 install -q textual 2>/dev/null || \
+            python3 -m pip install -q --user textual 2>/dev/null || true
+    fi
+fi
+
+exec "$PY" "$APP_DST/deck-settings.py" "$@"
