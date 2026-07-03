@@ -28,7 +28,7 @@ PY=/opt/cyberdeck/venv/bin/python3
 [[ -x $PY ]] || { echo "venv missing — run: sudo os/upgrades/biometrics/setup-biometrics.sh" >&2; exit 1; }
 
 exec "$PY" - "${@:-status}" <<'PY'
-import sys, time, struct, serial, os, json, subprocess, getpass, hashlib
+import sys, time, serial, os, json, subprocess
 from pathlib import Path
 
 # --- GT-521F32 / R307 protocol constants --------------------------------
@@ -319,14 +319,24 @@ def cmd_list_sensor(ser):
 def cmd_delete(ser, target):
     db = _load_db()
     if target == "all":
-        # Delete all named in local DB
+        # Delete all named in local DB (also handles user named "all")
+        if "all" in db:
+            _delete_template(ser, db["all"])
+            del db["all"]
+            _save_db(db)
+            print(f"  deleted [all] all")
+            if not db:
+                return 0
+        if not db:
+            print("  No enrolled fingerprints to delete.")
+            return 0
         for name, pid in list(db.items()):
             _delete_template(ser, pid)
             print(f"  deleted [{pid}] {name}")
         db.clear()
         _save_db(db)
         return 0
-    # By name or numeric ID
+    # By name or numeric ID (must come after "all" check)
     target_lower = target.lower()
     pid = None
     name = None
@@ -412,11 +422,14 @@ def main():
     # Fallback to 9600 if 57600 fails
     if not _verify_password(ser):
         ser.close()
+        print("  ℹ 57600 baud failed, trying 9600...", file=sys.stderr)
         baud = BAUD_FALLBACK
         try:
             ser = serial.Serial(dev, baudrate=baud, timeout=PACKET_TIMEOUT)
             if not _verify_password(ser):
-                print("  ✗ sensor not responding (check wiring)", file=sys.stderr)
+                print("  ✗ sensor not responding at 57600 or 9600 baud", file=sys.stderr)
+                print("     Check wiring: VCC→3.3V, GND→GND, TX→GPIO15, RX→GPIO14", file=sys.stderr)
+                print("     Override: DECK_BIO_BAUD=9600 deck-biometric status", file=sys.stderr)
                 return 1
         except serial.SerialException as e:
             print(f"  ✗ cannot open {dev} at 9600: {e}", file=sys.stderr)

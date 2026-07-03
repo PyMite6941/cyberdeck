@@ -328,6 +328,7 @@ class SystemScreen(Screen):
         elif btn == "sys-info":
             self._show_info()
 
+    @work(thread=True)
     def _show_hostname(self):
         out = self.query_one("#system-output", Static)
         hn = sys_read("/etc/hostname") or "?"
@@ -363,17 +364,21 @@ class SystemScreen(Screen):
     def on_key(self, event):
         out = self.query_one("#system-output", Static)
         current = str(out.renderable or "")
-        if "CPU Governor" not in current:
-            return
-        gov_map = {"p": "performance", "o": "ondemand", "s": "powersave", "c": "conservative"}
-        if event.key in gov_map:
-            target = gov_map[event.key]
-            for cpu_dir in Path("/sys/devices/system/cpu").glob("cpu[0-9]*"):
-                try:
-                    (cpu_dir / "cpufreq" / "scaling_governor").write_text(target)
-                except Exception:
-                    pass
-            self._show_governor()
+        if "CPU Governor" in current:
+            gov_map = {"p": "performance", "o": "ondemand", "s": "powersave", "c": "conservative"}
+            if event.key in gov_map:
+                target = gov_map[event.key]
+                for cpu_dir in Path("/sys/devices/system/cpu").glob("cpu[0-9]*"):
+                    try:
+                        (cpu_dir / "cpufreq" / "scaling_governor").write_text(target)
+                    except Exception:
+                        pass
+                self._show_governor()
+        elif "Display Mode" in current:
+            mode_map = {"w": "work", "s": "stealth", "b": "bright"}
+            if event.key in mode_map:
+                subprocess.run(["deck-mode", mode_map[event.key]], capture_output=True, text=True)
+                self._do_display_mode()
 
     @work(thread=True)
     def _do_display_mode(self):
@@ -549,6 +554,9 @@ class AboutScreen(Screen):
                 yield Button("Back", id="back", variant="default")
             yield Static(id="about-output", classes="output-box")
         yield Footer()
+
+    def on_mount(self):
+        self._gather_info()
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "about-refresh":
