@@ -24,6 +24,7 @@ Exact upstream product links: `hardware/Hardware list.md`. Specs rationale:
 - [ ] EC11 rotary encoder with push-click — ~$3
 - [ ] NP-F970 10050 mAh battery ×2 (Neewer/Powerextra) — ~$40–60 each
 - [ ] NP-F charger (dual-bay) — ~$20
+- [ ] USB microphone (mini/lavalier, class-compliant) — ~$10–15 *(deck-whisper voice recorder)*
 
 ### Electronics small parts
 - [ ] Micro-HDMI 90° ribbon adapter + 50 cm HDMI ribbon — ~$8
@@ -72,6 +73,7 @@ markup.*
 - [ ] EC11 encoder w/ click — ~฿30–60
 - [ ] NP-F970 10050 mAh ×2 — ~฿900–1,400 each
 - [ ] NP-F dual charger — ~฿400–600
+- [ ] USB microphone (mini/lavalier, class-compliant) — ~฿150–350 *(deck-whisper voice recorder)*
 
 ### Electronics small parts
 - [ ] Micro-HDMI ribbon kit — ~฿150–250

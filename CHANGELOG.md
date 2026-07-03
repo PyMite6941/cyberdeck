@@ -2,68 +2,143 @@
 
 Every addition/change to this project gets an entry: date, who (human or agent), what, why.
 
-## 2026-07-01 â€” Agent (deck-settings: unified system configuration TUI)
+## 2026-07-02 — Claude (generalized vendor-app auto-update into pps/_vendor_launcher.sh)
 
-**New `apps/deck-settings/`** â€” full-featured Textual TUI for managing every
+Extracted the clone/fetch/summarize/prompt logic just built for
+security-suite/run.sh into a shared, sourceable library,
+pps/_vendor_launcher.sh (mirrors the existing pps/_run_helper.sh
+pattern), so any future app whose real code lives in an external repo can
+reuse it instead of duplicating the script.
+
+- **pps/_vendor_launcher.sh** — new shared helper exposing endor_sync
+  <label> <repo-url> <src-dir> "$@": clone-on-first-run, fetch + prompt
+  with a change summary on later runs (interactive only, fast-forward
+  only), --check-updates=on/off toggle.
+- **pps/security-suite/run.sh** — rewritten to source the shared helper
+  instead of inlining the logic; behavior unchanged (re-verified against a
+  local fake-upstream repo: clone, decline, accept, toggle off/on).
+- **Docs**: pps/README.md gained a "Vendoring an external app" section;
+  pps/security-suite/README.md and AGENTS.md cross-reference it.
+- **Explicit scope note (per user request)**: this auto-update-check-and-
+  prompt pattern is an pps/-only convention. The os/ layer is never
+  managed this way — it only changes when a human deliberately re-runs the
+  installer for an actual functionality or security update, never via a
+  background/automatic check.
+
+## 2026-07-02 — Claude (security-suite: submodule ? self-updating launcher)
+
+Replaced the pps/security-suite git submodule with a self-updating
+launcher script. Motivation: the submodule pinned an exact commit of
+PyMite6941/Security-Suite in this repo's history, so checking whether that
+pin was stale (or updating it) required cross-repo GitHub access this repo's
+sessions don't always have — the pin silently drifted out of sync with no
+easy way to notice.
+
+- **Removed**: pps/security-suite submodule entry (.gitmodules,
+  .git/config, the gitlink itself).
+- **Added pps/security-suite/run.sh** — thin launcher, not the app: first
+  run clones Security-Suite into src/ (gitignored, a live clone the deck
+  manages); every later run fetches origin, and if there are new commits,
+  prints a one-line-per-commit summary and asks Update now? [y/N] before
+  launching (fast-forward only — never touches local edits in src/).
+  Non-interactive runs (no TTY) skip the check instead of blocking.
+- **Toggle**: un.sh --check-updates=off stops the prompt (persists in
+  .check-updates, gitignored); --check-updates=on resumes it.
+- **pps/security-suite/README.md** — documents the above.
+- **pps/README.md** / **pps/.gitignore** updated to match.
+
+## 2026-07-02 — Claude (checklist/doc-sync review)
+
+Ran a review pass (security/permissions, shopping-list & BOM completeness,
+doc/tree sync) to catch anything the 2026-06-16 audit missed. Findings and fixes:
+
+- **CHANGELOG.md** — backfilled the missing entry for the 2026-06-16 audit-fixes
+  commit (added below), which had no changelog entry of its own.
+- **pps/README.md** — added the undocumented pps/deck-lib/ shared-helpers
+  folder to the app list, tree, and roadmap.
+- **SHOPPING.md** — added a USB microphone line item (both checklists);
+  pps/deck-whisper records via PyAudio and had no mic anywhere in the parts
+  lists.
+- **BOM.md** — added the comms/radio subsystem (RTL-SDR, PN532, LoRa module,
+  Pi Pico, SMA antenna) that SHOPPING.md already priced but BOM.md omitted
+  entirely; added the microphone; clarified Y2M connector count (was ambiguous
+  "2 pairs" vs SHOPPING.md's "x2" — confirmed 2 units per BUILD-GUIDE).
+- **.gitignore** — added .env/*.env proactively (none currently tracked,
+  but nothing was excluding them either).
+- Verified clean, no action needed: file permissions (all scripts still
+  +x), no secrets or personal-machine paths committed, os/security/*
+  firewall/SSH/sysctl hardening still correct.
+- **Open item, not fixed**: os/image/make_led_button.py, inspect_screenframe.py,
+  and inspect_buttons.py still reference Rigth screen frame.3mf / ...rigth
+  retainer.3mf as **input** filenames from the hardware/ submodule (not
+  Right). Left alone because those paths must match the submodule's actual
+  filenames, which weren't checked out to verify — confirm against upstream
+  before renaming.
+
+## 2026-07-01 — Agent (deck-settings: unified system configuration TUI)
+
+**New pps/deck-settings/** — full-featured Textual TUI for managing every
 aspect of the deck:
-- **Network & WiFi** â€” scan visible networks, check connection status and IP
-- **Storage** â€” disk usage, zram compression stats, mount points
-- **Apps** â€” list installed project apps with launcher availability
-- **System** â€” hostname, per-core CPU governor switching (P/O/S/C keys),
+- **Network & WiFi** — scan visible networks, check connection status and IP
+- **Storage** — disk usage, zram compression stats, mount points
+- **Apps** — list installed project apps with launcher availability
+- **System** — hostname, per-core CPU governor switching (P/O/S/C keys),
   display mode (calls deck-mode), uptime & temperature
-- **Security** â€” deck-vault status/open/close, fingerprint scanner status,
+- **Security** — deck-vault status/open/close, fingerprint scanner status,
   SSH service + configuration status, UFW firewall status
-- **About** â€” Pi model, kernel, OS version, memory, disk, temp, uptime
+- **About** — Pi model, kernel, OS version, memory, disk, temp, uptime
 
-**New `os/extras/bin/deck-settings`** â€” launcher that auto-deploys the app on
-first run from `/opt/cyberdeck/lib/deck-settings/` to `~/.local/share/deck-settings/`.
+**New os/extras/bin/deck-settings** — launcher that auto-deploys the app on
+first run from /opt/cyberdeck/lib/deck-settings/ to ~/.local/share/deck-settings/.
 Installs textual if missing.
 
-**New `os/extras/lib/deck-settings/deck-settings.py`** â€” the Textual app source,
+**New os/extras/lib/deck-settings/deck-settings.py** — the Textual app source,
 deployed by setup-extras.sh to the staging lib directory so it's included in the
-bootable SD card image via the `inject-to-sd.ps1` pipeline.
+bootable SD card image via the inject-to-sd.ps1 pipeline.
 
-**Modified `os/extras/setup-extras.sh`** â€” installs deck-settings command +
+**Modified os/extras/setup-extras.sh** — installs deck-settings command +
 copies lib. Updated "Done" summary.
 
-**Modified `os/extras/bin/deck-help`** â€” added deck-settings to System Commands
+**Modified os/extras/bin/deck-help** — added deck-settings to System Commands
 section.
 
-**Modified `apps/README.md`** â€” added deck-settings to the app listing, directory
+**Modified pps/README.md** — added deck-settings to the app listing, directory
 tree, and roadmap table.
 
-## 2026-07-01 â€” Agent (biometric fingerprint scanner support)
+## 2026-07-01 — Agent (biometric fingerprint scanner support)
 
-**New `os/upgrades/biometrics/`** â€” opt-in biometric authentication layer:
-- `bin/deck-biometric` â€” GT-521F32 / R307 / R503 UART fingerprint scanner driver
+**New os/upgrades/biometrics/** — opt-in biometric authentication layer:
+- in/deck-biometric — GT-521F32 / R307 / R503 UART fingerprint scanner driver
   with enroll/verify/identify/list/delete/clear/vault-open commands. Implements
   the FPS_GEN2 protocol over pyserial, stores templates on-sensor (never leaves
-  the module), keeps local nameâ†’ID mapping in `~/.deck-biometric/enrollments.json`.
-  `vault-open` integrates with deck-vault for fingerprint-based unlock.
-- `setup-biometrics.sh` â€” installs pyserial, deploys command, adds user to
-  `dialout` group, appends commented `enable_uart=1` to config.txt.
-- `biometric.service` â€” optional systemd oneshot unit for boot-time status.
-- `README.md` â€” hardware wiring (VCCâ†’3.3V, GNDâ†’GND, TXâ†’GPIO15, RXâ†’GPIO14),
+  the module), keeps local name->ID mapping in ~/.deck-biometric/enrollments.json.
+  ault-open integrates with deck-vault for fingerprint-based unlock.
+- setup-biometrics.sh — installs pyserial, deploys command, adds user to
+  dialout group, appends commented enable_uart=1 to config.txt.
+- iometric.service — optional systemd oneshot unit for boot-time status.
+- README.md — hardware wiring (VCC->3.3V, GND->GND, TX->GPIO15, RX->GPIO14),
   commands, vault integration, security notes.
 
-**Hardware CAD** `hardware-custom/Biometrics/make_fingerprint_mount.py` â€”
+**Hardware CAD** hardware-custom/Biometrics/make_fingerprint_mount.py —
 parametric FreeCAD generator for a 3D-printed scanner bracket, supporting
 GT-521F32 and R307 footprints with M2 screw bosses and deck mounting holes.
 
-**Modified `os/upgrades/setup-upgrades.sh`** â€” added step [7/7] calling
+**Modified os/upgrades/setup-upgrades.sh** — added step [7/7] calling
 biometrics sub-installer. Header updated to list all 7 upgrades.
 
-**Modified `os/upgrades/config-upgrades.txt`** â€” added commented UART enable
-lines for the fingerprint scanner under `# --- CYBERDECK-BIOMETRICS ---`.
+**Modified os/upgrades/config-upgrades.txt** — added commented UART enable
+lines for the fingerprint scanner under # --- CYBERDECK-BIOMETRICS ---.
 
-**Modified `os/upgrades/README.md`** â€” added biometrics to the upgrade table,
+**Modified os/upgrades/README.md** — added biometrics to the upgrade table,
 new section 6 with wiring table and commands, Files table updated.
 
-**Modified `SHOPPING.md`** â€” added GT-521F32 (~$20â€“30) and R307 (~$12â€“18) to
+**Modified SHOPPING.md** — added GT-521F32 (~-30) and R307 (~-18) to
 both Amazon and Shopee/Lazada checklists.
 
-**Modified `BOM.md`** â€” added "Biometrics add-on" section with scanner picks,
+**Modified BOM.md** — added "Biometrics add-on" section with scanner picks,
 mounting notes, and threat-model disclaimer (convenience, not high-security).
+
+## 2026-06-16 — Agent (post-publish audit fixes)
 
 ## 2026-06-16 â€” Agent (repo made public on GitHub)
 

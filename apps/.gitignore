@@ -6,3 +6,7 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+# security-suite/run.sh clones the real app here at runtime; not vendored
+security-suite/src/
+security-suite/.check-updates

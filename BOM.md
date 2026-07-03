@@ -23,6 +23,17 @@ by the DRAM shortage — see notes). Upstream links for every item are in
 | Trackball | **Used Logitech Trackman Marble** (donor for PCB + 40 mm ball) | Trackball module is dimensioned for this exact PCB; author plans custom electronics later | ~$20–35 used |
 | Scroll handle | **EC11 rotary encoder with push-click** | Standard part, fits the encoder mount; wired to GPIO (see `os/image/config-additions.txt`) | ~$2–3 |
 | Battery | **Neewer/Powerextra NP-F970 10050 mAh** (USB-C versions exist) | Battery module is moulded for NP-F; brand-name Jupio Ultra C is ~$155 — the ~$40 clones are the value pick; get 2 for hot-swap | ~$40–60 (×2 ≈ $90) |
+| Microphone | **USB mini/lavalier mic, class-compliant** | `apps/deck-whisper` records via PyAudio — needs a USB audio-input device, the deck has no built-in mic | ~$10–15 |
+
+## Comms & radio (optional — see `os/upgrades/`)
+
+| Role | Best pick | Why | Est. price |
+|---|---|---|---|
+| SDR | **RTL-SDR Blog V4** + dipole antenna kit | AM/FM/general SDR reception for `deck-net`/radio apps | ~$40 |
+| NFC/RFID | **PN532 module (I2C)** | `deck-rfid` / comms module | ~$5 |
+| LoRa | **RFM95W-class SX1276, AS923/920–925 MHz** | `deck-lora` / comms module — AS923 is the Thailand-legal band, not US 915 / EU 868 | ~$12 |
+| USB bridge | **Raspberry Pi Pico (RP2040)** | comms-module USB bridge | ~$4 |
+| Antenna | **SMA pigtail + 915/923 MHz whip** | comms-module LoRa | ~$3 |
 
 ## Connectors & small parts (mostly AliExpress)
 
@@ -30,7 +41,7 @@ by the DRAM shortage — see notes). Upstream links for every item are in
 |---|---|---|
 | 0B-style self-locking connectors (module power/signal) | 6 pairs | ~$25 |
 | 2B self-locking connector (battery) | 1 | ~$10 |
-| Y2M 8-pin aviation connectors | 2 pairs | ~$6 |
+| Y2M 8-pin aviation connectors | 2 | ~$6 |
 | Pogo pins GF50 (battery contacts) | 2 | ~$3 |
 | 16 mm momentary switches ×3, 12 mm ×1, toggles ×2, slide ×1 | — | ~$12 |
 | 12×12 tactile buttons ×10, 3 mm LEDs ×4 | — | ~$5 |

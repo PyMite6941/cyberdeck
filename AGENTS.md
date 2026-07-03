@@ -11,6 +11,11 @@ Read `README.md` (project map) and `os/README.md` (OS layer docs) first.
 3. **`os/` must stay minimal and idempotent** — see "Design constraints" in
    `os/README.md`. New boot behaviour = new file in `os/boot/boot.d/`, not edits to
    the runner or the systemd unit.
+   **`os/` is never auto-update-checked** — it changes only when a human
+   deliberately re-runs the installer for a real functionality or security
+   fix, never via a background prompt. That pattern (`apps/_vendor_launcher.sh`)
+   is an `apps/`-only convention, for apps whose code lives in an external
+   repo (e.g. `security-suite`) — it doesn't apply to this layer.
 4. **Shell scripts use LF endings** (`.gitattributes` enforces this; the repo
    lives on a filesystem shared with Windows, so be careful with tools that
    rewrite files).
