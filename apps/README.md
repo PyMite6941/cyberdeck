@@ -15,14 +15,29 @@ One subfolder per app keeps things tidy.
 
 ## Apps here
 
+- **`deck-store/`** — the deck's **app store**. Browse the catalog, see what's
+  installed, install vendored apps (clone + private venv), and get an **Updates**
+  tab when a vendored app is behind its remote. CLI + Textual TUI. `./run.sh`
+  (or `deck-store list|search|info|install|upgrade|refresh`). See
+  `deck-store/README.md`.
 - **`grimoire/`** — the deck's offline search engine. Folds a pile of documents
   into one compressed (<1 GB) SQLite tome you can search with no internet.
-  CLI (rich) + TUI (Textual) frontends. `./run.sh`. See `grimoire/README.md`.
+  CLI (rich) + TUI (Textual) frontends. **Vendored** (real code at
+  [PyMite6941/grimoire](https://github.com/PyMite6941/grimoire); `src/` is a
+  managed clone with its own private venv). Ships `import_data.py` to pull
+  public-domain texts from Project Gutenberg & equivalents. `./run.sh`. See
+  `grimoire/README.md`.
 - **`security-suite/`** — your security/vault app. Encrypted vault with 2FA,
   password generation, breach checking. CLI (questionary) + TUI (Textual).
-  `run.sh` is a self-updating launcher (not the app itself) — first run
-  clones [Security-Suite](https://github.com/PyMite6941/Security-Suite),
-  later runs check for and offer to pull updates. See `security-suite/README.md`.
+  **Vendored**: `install.sh` clones [Security-Suite](https://github.com/PyMite6941/Security-Suite)
+  into `src/` with a private venv; `run.sh` launches it; later runs offer
+  updates. See `security-suite/README.md`.
+- **`deck-sensors/`** — live TUI for Pi HAT / SoC sensors (temp, humidity, IMU,
+  memory), logs to SQLite. `./run.sh` / `--once`. See `deck-sensors/README.md`.
+- **`deck-radio/`** — RTL-SDR spectrum scanner + FM/ADS-B/AIS/433 MHz decoders.
+  `./run.sh` / `--devices` / `--scan`. See `deck-radio/README.md`.
+- **`deck-serial/`** — UART / serial console monitor + logger (pyserial). Pairs
+  with `deck-gpio`. `./run.sh` / `--list`. See `deck-serial/README.md`.
 - **`deck-gpio/`** — GPIO/I2C/SPI rapid prototyper. Pass a pin description and
   it auto-generates, runs, and debugs a Python test script for that layout.
   CLI (argparse). `./run.sh --map i2c 0x3c ssd1306`. See `deck-gpio/README.md`.
@@ -50,10 +65,10 @@ One subfolder per app keeps things tidy.
   context sizes, measures tok/s/TTFT/RAM/temp deltas. Textual TUI. `./run.sh`.
 - **`deck-storage-bench/`** — storage benchmark suite. Tests SD/NVMe/USB/zram
   seq + 4K random, auto-recommends best device. Textual TUI. `./run.sh`.
-- **deck-settings/** � unified system configuration TUI. Network & WiFi scanning,
+- **deck-settings/** � unified system configuration TUI. Network & WiFi scanning,
   storage usage, app listing, CPU governor switching, display modes, deck-vault,
   fingerprint biometrics, SSH/firewall status, system info. Textual TUI. ./run.sh.
-- **deck-lib/** � shared Python helpers (db.py, ollama.py, pi_sensors.py)
+- **deck-lib/** � shared Python helpers (db.py, ollama.py, pi_sensors.py)
   used by the deck-* apps above. Not a standalone app; no un.sh.
 
 ```
@@ -72,10 +87,10 @@ apps/
 ├── deck-bootvis/       # boot time profiler (Textual TUI)
 ├── deck-ollama-profiler/ # LLM inference benchmark (Textual TUI)
 ├── deck-storage-bench/ # storage benchmark suite (Textual TUI)
-- **deck-settings/** � unified system configuration TUI. Network & WiFi scanning,
+- **deck-settings/** � unified system configuration TUI. Network & WiFi scanning,
   storage usage, app listing, CPU governor switching, display modes, deck-vault,
   fingerprint biometrics, SSH/firewall status, system info. Textual TUI. ./run.sh.
-- **deck-lib/** � shared Python helpers (db.py, ollama.py, pi_sensors.py)
+- **deck-lib/** � shared Python helpers (db.py, ollama.py, pi_sensors.py)
   used by the deck-* apps above. Not a standalone app; no un.sh.
 ├── <your-next-app>/
 │   └── run.sh          # optional launch convention (below)
@@ -126,23 +141,44 @@ like `security-suite` — don't add it as a git submodule. Submodules pin an
 exact commit in *this* repo's history, so checking whether that pin is stale
 needs cross-repo access this repo doesn't always have.
 
-Instead, source `_vendor_launcher.sh` from the app's `run.sh`:
+Instead, give the app **two** thin scripts that source `_vendor_launcher.sh`.
+The installer must be named `install.sh` (not `run.sh`):
 
 ```bash
+# myapp/install.sh — installer / updater
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/../_vendor_launcher.sh"
 vendor_sync "myapp" "https://github.com/user/repo.git" "$DIR/src" "$@"
-exec "$DIR/src/run.sh" "$@"
 ```
 
-`vendor_sync` clones the repo into `src/` (gitignore it) on first run; on
-every later run it fetches `origin` and, if there are new commits, prints a
-one-line-per-commit summary and asks `Update now? [y/N]` before
-fast-forwarding — never touching local edits, and skipping the check
-entirely on non-interactive runs (no TTY). `./run.sh --check-updates=off`
-(persisted in a gitignored `.check-updates` file) stops the prompt;
-`--check-updates=on` resumes it. See `security-suite/README.md` for a
-worked example.
+```bash
+# myapp/run.sh — launcher
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/../_vendor_launcher.sh"
+case "${1:-}" in --check-updates=*) exec "$DIR/install.sh" "$@" ;; esac
+"$DIR/install.sh"
+exec "$(vendor_python "$DIR/src")" "$DIR/src/run.py" "$@"
+```
+
+`vendor_sync` (in `install.sh`):
+
+- **Clones** the repo into `src/` (gitignored via the generic `*/src/` rule) on
+  first run, and builds a **private virtualenv at `src/.venv`** with the app's
+  requirements — each vendored app is isolated from the others and from the
+  shared `apps/.venv`.
+- On later runs **fetches `origin`** and, if there are new commits, prints a
+  one-line-per-commit summary and asks `Update now? [y/N]` before
+  fast-forwarding — never touching local edits, skipping the check on
+  non-interactive runs (no TTY).
+- **After a successful update pull, wipes caches**: all `__pycache__`/`*.pyc`
+  under `src/`, plus any globs you list in a `.update-clean` file next to `src/`
+  (one per line, `#` comments allowed), then re-syncs the venv.
+- `./run.sh --check-updates=off` (persisted in a gitignored `.check-updates`
+  file) stops the prompt; `--check-updates=on` resumes it.
+
+`vendor_python "$DIR/src"` echoes the private venv's python. See
+`security-suite/` and `grimoire/` for worked examples. The deck-store installs
+vendored apps by writing exactly this `install.sh`/`run.sh` pair for you.
 
 This convention is for `apps/` only — the `os/` layer is never
 auto-update-checked (see `AGENTS.md`).

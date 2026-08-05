@@ -7,6 +7,13 @@ __pycache__/
 *.db-wal
 *.db-shm
 
-# security-suite/run.sh clones the real app here at runtime; not vendored
-security-suite/src/
-security-suite/.check-updates
+# Vendored apps (see README.md § "Vendoring an external app"): run.sh clones
+# the real app into <app>/src/ at runtime. That's an installed live clone, not
+# vendored code — it never belongs in this repo. By convention src/ is reserved
+# for this, so the rule is generic: any future vendored app is covered with no
+# .gitignore change needed.
+*/src/
+*/.check-updates
+
+# deck-store runtime state (installed/commit/update cache) — per-deck, not source
+deck-store/state.json

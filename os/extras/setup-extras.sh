@@ -31,6 +31,7 @@ install -m 755 "$SCRIPT_DIR/bin/deck-mode"      /usr/local/bin/deck-mode
 install -m 755 "$SCRIPT_DIR/bin/deck-vault"     /usr/local/bin/deck-vault
 install -m 755 "$SCRIPT_DIR/bin/deck-ide"       /usr/local/bin/deck-ide
 install -m 755 "$SCRIPT_DIR/bin/deck-desktop"   /usr/local/bin/deck-desktop
+install -m 755 "$SCRIPT_DIR/bin/deck-fs"        /usr/local/bin/deck-fs
 install -m 755 "$SCRIPT_DIR/bin/deck-app"       /usr/local/bin/deck-app
 install -m 755 "$SCRIPT_DIR/bin/deck-help"      /usr/local/bin/deck-help
 install -m 755 "$SCRIPT_DIR/bin/deck-check"     /usr/local/bin/deck-check
@@ -43,7 +44,8 @@ fi
 dos2unix -q /usr/local/bin/deck-mode /usr/local/bin/deck-vault \
               /usr/local/bin/deck-ide /usr/local/bin/deck-desktop \
               /usr/local/bin/deck-app /usr/local/bin/deck-help \
-              /usr/local/bin/deck-check /usr/local/bin/deck-settings 2>/dev/null || true
+              /usr/local/bin/deck-fs /usr/local/bin/deck-check \
+              /usr/local/bin/deck-settings 2>/dev/null || true
 # mesa-utils provides glxinfo, used by deck-check to verify hardware GL.
 apt-get install -y --no-install-recommends mesa-utils 2>/dev/null || true
 

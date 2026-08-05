@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
-# grimoire launcher — finds the venv and runs the frontend picker
+# grimoire — launcher (offline search + RAG). Thin wrapper: real code lives at
+# github.com/PyMite6941/grimoire, installed by ./install.sh into src/ (gitignored)
+# with its own private venv.
 set -euo pipefail
-
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-if [[ -f "$DIR/../.venv/bin/python" ]]; then
-    PYTHON="$DIR/../.venv/bin/python"
-elif [[ -f "$DIR/../.venv/Scripts/python" ]]; then
-    PYTHON="$DIR/../.venv/Scripts/python"
-elif command -v python3 &>/dev/null; then
-    PYTHON="python3"
-else
-    PYTHON="python"
-fi
-
-exec "$PYTHON" "$DIR/run.py" "$@"
+. "$DIR/../_vendor_launcher.sh"
+case "${1:-}" in --check-updates=*) exec "$DIR/install.sh" "$@" ;; esac
+"$DIR/install.sh"
+exec "$(vendor_python "$DIR/src")" "$DIR/src/run.py" "$@"

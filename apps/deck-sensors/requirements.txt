@@ -1,0 +1,5 @@
+textual>=0.60
+rich>=13.0
+# Optional I2C environment sensor (BME280). Safe to omit off-Pi:
+# adafruit-circuitpython-bme280
+# adafruit-blinka

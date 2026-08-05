@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "updated": "2026-07-31",
+  "remote": "",
+  "categories": [
+    "system", "network", "security", "radio", "hardware",
+    "ai", "dev", "ctf", "media", "storage"
+  ],
+  "apps": [
+    {
+      "id": "security-suite",
+      "name": "Security Suite",
+      "summary": "Encrypted vault — 2FA, password generation, breach checking.",
+      "category": "security",
+      "tags": ["vault", "2fa", "offline", "passwords"],
+      "interfaces": ["cli", "tui"],
+      "source": { "type": "git", "url": "https://github.com/PyMite6941/Security-Suite.git", "branch": "main" },
+      "entry": "run.py"
+    },
+    {
+      "id": "grimoire",
+      "name": "Grimoire",
+      "summary": "Offline search + RAG — fold a corpus into one compressed SQLite tome.",
+      "category": "dev",
+      "tags": ["search", "rag", "offline", "sqlite", "ollama"],
+      "interfaces": ["cli", "tui"],
+      "source": { "type": "git", "url": "https://github.com/PyMite6941/grimoire.git", "branch": "master" },
+      "entry": "run.py"
+    },
+    {
+      "id": "deck-sensors",
+      "name": "Deck Sensors",
+      "summary": "Live TUI for Pi HAT sensors — temp, humidity, IMU, GPS; log to SQLite.",
+      "category": "hardware",
+      "tags": ["sensors", "hat", "i2c", "offline", "logging"],
+      "interfaces": ["cli", "tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-radio",
+      "name": "Deck Radio",
+      "summary": "RTL-SDR spectrum scanner + FM / ADS-B / AIS decoders.",
+      "category": "radio",
+      "tags": ["sdr", "rtl-sdr", "offline", "hardware", "recon"],
+      "interfaces": ["cli", "tui"],
+      "requires_pkg": ["rtl-sdr"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-serial",
+      "name": "Deck Serial",
+      "summary": "UART / serial console monitor + logger for debugging boards.",
+      "category": "hardware",
+      "tags": ["serial", "uart", "debug", "hardware"],
+      "interfaces": ["cli", "tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-dashboard",
+      "name": "Deck Dashboard",
+      "summary": "Real-time system monitor — CPU temp, RAM, disk, network, processes.",
+      "category": "system",
+      "tags": ["monitor", "system"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-perf",
+      "name": "Deck Perf",
+      "summary": "System performance tuner — per-core freq, temp, governor switching.",
+      "category": "system",
+      "tags": ["performance", "cpu", "governor"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-bootvis",
+      "name": "Deck Bootvis",
+      "summary": "Boot time profiler — parses systemd-analyze, suggests fixes.",
+      "category": "system",
+      "tags": ["boot", "systemd", "profiling"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-settings",
+      "name": "Deck Settings",
+      "summary": "Unified config TUI — WiFi, storage, governor, vault, biometrics.",
+      "category": "system",
+      "tags": ["settings", "config", "wifi"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-storage-bench",
+      "name": "Deck Storage Bench",
+      "summary": "Storage benchmark — SD/NVMe/USB/zram speed, recommends best device.",
+      "category": "storage",
+      "tags": ["storage", "benchmark", "disk"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-net",
+      "name": "Deck Net",
+      "summary": "Network field toolkit — nmap/tcpdump scans + Ollama AI analysis.",
+      "category": "network",
+      "tags": ["network", "nmap", "tcpdump", "recon"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-whisper",
+      "name": "Deck Whisper",
+      "summary": "Offline voice recorder & transcriber — faster-whisper + history.",
+      "category": "media",
+      "tags": ["audio", "transcription", "offline"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-eval",
+      "name": "Deck Eval",
+      "summary": "Local model benchmark — HumanEval/GSM8K/MMLU for Ollama models.",
+      "category": "ai",
+      "tags": ["llm", "benchmark", "ollama"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-ollama-profiler",
+      "name": "Deck Ollama Profiler",
+      "summary": "LLM inference benchmark — tok/s, TTFT, RAM, temp across contexts.",
+      "category": "ai",
+      "tags": ["llm", "ollama", "benchmark"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-proxy",
+      "name": "Deck Proxy",
+      "summary": "AI prompt router — templates, model selection, history.",
+      "category": "ai",
+      "tags": ["llm", "router", "prompts"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-gpio",
+      "name": "Deck GPIO",
+      "summary": "GPIO/I2C/SPI rapid prototyper — pin description to runnable script.",
+      "category": "hardware",
+      "tags": ["gpio", "i2c", "spi", "hardware"],
+      "interfaces": ["cli"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    },
+    {
+      "id": "deck-lab",
+      "name": "Deck Lab",
+      "summary": "Portable CTF lab — Docker practice containers + note-taking.",
+      "category": "ctf",
+      "tags": ["ctf", "docker", "security"],
+      "interfaces": ["tui"],
+      "source": { "type": "builtin" },
+      "entry": "run.sh"
+    }
+  ]
+}

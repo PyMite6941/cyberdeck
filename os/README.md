@@ -96,11 +96,27 @@ Rules:
 
 `boot.d/10-example.sh` ships as a working example — replace or delete it.
 
+## Bash is the deck's shell of record
+
+Everything the deck adds — the prompt, `deck-lite`/`deck-gui`, `temp`, `fs`, the
+`deck-ide` auto-resume — is bash, loaded from `~/.bashrc`. Under a different
+login shell none of it exists and the deck comes up as a plain terminal, so
+`setup.sh` **pins the login shell to bash** for both the deck user and root
+(via `chsh`, only when it's actually wrong — re-running is a no-op) and wires
+`/opt/cyberdeck/bashrc-cyberdeck.sh` into both accounts so `sudo -i` lands in
+the same environment. Raspberry Pi OS already defaults to bash; this makes it
+guaranteed rather than assumed.
+
+That's also why the file explorer is bash: `pcmanfm` only exists on the desktop
+image and disappears the moment you run `deck-ide` or `deck-lite`. See
+**`deck-fs`** under Extras.
+
 ## Theme
 
 - **Prompt** — green/cyan two-line prompt with exit-status indicator
   (`theme/bashrc-cyberdeck.sh`). Aliases/helpers: `ll`, `mem`, `bootlog`, `deck`,
-  and `temp` (SoC °C via `vcgencmd`, sysfs fallback).
+  `temp` (SoC °C via `vcgencmd`, sysfs fallback), and `fs` (browse + cd, see
+  `deck-fs`).
 - **Login banner** — DFCD ASCII art + live host/ip/temp/mem/swap/disk/uptime,
   with the temperature coloured green/yellow/red at 65°/75°
   (`theme/motd.sh` → `/etc/update-motd.d/10-cyberdeck`).
@@ -225,6 +241,14 @@ and borrows power on demand. Run `sudo ./extras/setup-virtual.sh`.
 - **`deck-ide`** / **`deck-desktop`** — headless IDE toggle. `deck-ide` drops
   the desktop, kills the display manager (~2 GB freed), and starts a tmux
   session with Neovim + Claude Code + htop. `deck-desktop` restores the GUI.
+- **`deck-fs`** — the file explorer, written in bash: no python, no ncurses, no
+  deps beyond coreutils, so it works on the console after `deck-ide`/`deck-lite`
+  when `pcmanfm` is gone. `j/k` move, `l`/`h` in and out, `e` edit, `v` view,
+  `/` filter, `.` toggle hidden, `c` copy path, `x` run a command on the
+  selection, `q` quit. It prints the directory you quit in and nothing else, so
+  `cd "$(deck-fs)"` works — the `fs` shell function does exactly that, which is
+  the everyday way to use it (an alias can't work; a subshell can't `cd` its
+  parent).
 - **`deck-drive`** — attach network/cloud storage as a local disk:
   - `deck-drive iscsi <nas-ip>` → a NAS target appears as `/dev/sdX` (partition,
     format, even put a `deck-vault` on it).

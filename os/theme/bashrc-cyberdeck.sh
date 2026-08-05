@@ -29,6 +29,16 @@ deck-gui() {
     sudo systemctl isolate graphical.target
 }
 
+# ── file explorer ──
+# deck-fs prints the directory you quit in, so wrapping it in a function is what
+# makes browsing actually move the shell. It has to be a function, not an alias:
+# a subshell can't cd the parent. `fs` is the everyday entry point.
+fs() {
+    local dest
+    dest="$(deck-fs "${1:-$PWD}")" || return
+    [[ -n "$dest" && -d "$dest" ]] && cd "$dest" || true
+}
+
 # SoC temperature in °C — vcgencmd on Pi (4 and 5), sysfs fallback anywhere else.
 temp() {
     if command -v vcgencmd >/dev/null 2>&1; then

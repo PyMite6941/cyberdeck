@@ -67,6 +67,7 @@ show_system() {
 
 show_storage() {
     section "Storage"
+    cmd "deck-fs"    "File explorer, pure bash (works with no desktop)" "deck-fs [DIR]  — or 'fs' to browse and cd"
     cmd "deck-vault" "LUKS-encrypted file container"  "deck-vault init|open|close"
     cmd "deck-drive" "Attach network/cloud storage"   "deck-drive iscsi|cloud|list|off"
 }

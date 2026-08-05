@@ -97,17 +97,40 @@ systemctl daemon-reload
 systemctl enable cyberdeck-boot.service
 
 echo "==> [5/6] Installing theme"
+# ── bash is the deck's shell of record ──────────────────────────────────────
+# Everything here — the prompt, deck-lite/deck-gui, temp(), the deck-ide
+# auto-resume, deck-fs — lives in bash and is loaded from ~/.bashrc. If the
+# login shell is anything else (sh/dash/zsh), none of it loads and the deck
+# comes up as a plain terminal. Raspberry Pi OS defaults to bash, but that is
+# an assumption, not a guarantee, so pin it. Idempotent: chsh only runs when
+# the shell is actually wrong.
+DECK_BASH="$(command -v bash || echo /bin/bash)"
+grep -qx "$DECK_BASH" /etc/shells 2>/dev/null || echo "$DECK_BASH" >> /etc/shells
+for _u in "$DECK_USER" root; do
+    _cur="$(getent passwd "$_u" | cut -d: -f7)"
+    if [[ -n "$_cur" && "$_cur" != "$DECK_BASH" ]]; then
+        echo "  $_u: login shell $_cur -> $DECK_BASH"
+        chsh -s "$DECK_BASH" "$_u" || echo "  (chsh failed for $_u — set it by hand)"
+    fi
+done
+unset _u _cur
+
 install -m 644 "$SCRIPT_DIR/theme/bashrc-cyberdeck.sh" /opt/cyberdeck/bashrc-cyberdeck.sh
 install -m 644 "$SCRIPT_DIR/theme/fastfetch.jsonc" /opt/cyberdeck/fastfetch.jsonc
 install -m 755 "$SCRIPT_DIR/theme/motd.sh" /etc/update-motd.d/10-cyberdeck
 dos2unix -q /opt/cyberdeck/bashrc-cyberdeck.sh /etc/update-motd.d/10-cyberdeck || true
 # Silence the stock Debian MOTD so only the deck banner shows.
 [[ -f /etc/motd ]] && : > /etc/motd
-# Marker-guarded append so re-running never duplicates the line.
-if ! grep -q "cyberdeck-theme" "$DECK_HOME/.bashrc" 2>/dev/null; then
-    printf '\n# cyberdeck-theme\n[ -f /opt/cyberdeck/bashrc-cyberdeck.sh ] && . /opt/cyberdeck/bashrc-cyberdeck.sh\n' \
-        >> "$DECK_HOME/.bashrc"
-fi
+# Marker-guarded append so re-running never duplicates the line. Root gets it
+# too, so `sudo -i` lands in the same deck environment instead of a bare shell.
+for _rc in "$DECK_HOME/.bashrc" "$(getent passwd root | cut -d: -f6)/.bashrc"; do
+    [[ -n "$_rc" ]] || continue
+    if ! grep -q "cyberdeck-theme" "$_rc" 2>/dev/null; then
+        printf '\n# cyberdeck-theme\n[ -f /opt/cyberdeck/bashrc-cyberdeck.sh ] && . /opt/cyberdeck/bashrc-cyberdeck.sh\n' \
+            >> "$_rc"
+    fi
+done
+unset _rc
 # tmux theme — only if the user doesn't already have one.
 if [[ ! -e "$DECK_HOME/.tmux.conf" ]]; then
     install -m 644 -o "$DECK_USER" -g "$DECK_USER" \

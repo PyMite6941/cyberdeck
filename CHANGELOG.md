@@ -2,7 +2,165 @@
 
 Every addition/change to this project gets an entry: date, who (human or agent), what, why.
 
-## 2026-07-02 ó Claude (generalized vendor-app auto-update into pps/_vendor_launcher.sh)
+## 2026-07-31 ‚Äî Claude (deck-store app store + 3 new apps; grimoire vendored; install.sh convention)
+
+Added an app store, three new apps, and reworked the vendoring convention so
+vendored apps get private venvs, cache-cleaning updates, and commit tracking.
+
+- **apps/deck-store/** ‚Äî new app store, CLI + Textual TUI (cyberdeck theme).
+  Browse a `registry.json` catalog, see per-app **install status** (`‚úì` current,
+  `‚ü≥` update available, `‚óã` not installed, `‚óÜ` built-in), install vendored apps
+  (clone + private venv), and refresh to check remotes. Tracks **which git
+  commit is loaded** per vendored app; when any is behind, an **Updates tab**
+  appears and `u` upgrades (fast-forward ‚Üí wipe caches ‚Üí re-sync venv). State
+  cached in gitignored `state.json`. Modules: `store/registry.py`,
+  `store/appstate.py`, `store/actions.py`. Verified: CLI (list/info/refresh) +
+  headless Textual compose/tab-filter/detail.
+- **apps/deck-sensors/**, **apps/deck-radio/**, **apps/deck-serial/** ‚Äî three new
+  apps, each CLI + themed Textual TUI, degrade gracefully off-Pi. Sensors uses
+  `deck-lib/pi_sensors`; radio wraps the rtl-sdr toolchain; serial is a pyserial
+  UART monitor. All three headless-compose-tested.
+- **apps/deck-lib/deck_theme.py** ‚Äî shared cyberdeck Textual theme (cyan/phosphor
+  palette) + CSS + status glyphs, so new apps share one look. Safe no-op on
+  Textual builds without the theme API.
+- **Vendoring reworked (`apps/_vendor_launcher.sh`)** ‚Äî vendored apps now split
+  into **`install.sh`** (bootstrap/updater) + **`run.sh`** (launcher). Each gets
+  a **private venv at `src/.venv`** (isolated from the shared `apps/.venv`);
+  after a successful update pull, **caches are wiped** (`__pycache__`/`*.pyc` +
+  configurable `.update-clean` globs) and the venv re-synced. Applied to
+  security-suite and grimoire. New `vendor_python` helper.
+- **grimoire vendored** ‚Äî extracted the app to its own repo
+  [PyMite6941/grimoire](https://github.com/PyMite6941/grimoire) (public) and
+  replaced apps/grimoire with an install.sh/run.sh launcher; the 5.1 GB
+  corpus/tome was preserved locally by moving it into the gitignored `src/`
+  clone. Added **`import_data.py`** to the repo: pulls public-domain texts from
+  **Project Gutenberg** (gutendex API), **Wikisource**, and lists Standard
+  Ebooks, optionally folding them into the tome ‚Äî verified against the live API
+  (searched + downloaded a real book).
+- **apps/.gitignore** ‚Äî the earlier generic `*/src/` + `*/.check-updates` rules
+  already cover every vendored app's clone and private venv; added
+  `deck-store/state.json`.
+
+### Follow-up the same day ‚Äî deck-store hardening (Claude)
+
+Drove the store headlessly (`App.run_test`) plus an end-to-end install/upgrade
+test against a throwaway local git repo. That turned up five real defects:
+
+- **Long jobs no longer freeze the UI.** `git clone`, `pip install` and
+  `git fetch` ran on the event loop, so the store locked up for the whole
+  install (minutes, on a Pi). They now run on Textual worker threads with every
+  UI touch marshalled back through `call_from_thread`; per-app progress streams
+  to the status bar, and a `busy` guard stops jobs overlapping.
+- **The colour scheme was inert.** `[ok]`/`[warn]`/`[title]`/`[big]`/`[primary]`
+  markup resolves against *colour* names, not the stylesheet, so anything tagged
+  that way rendered in the default foreground. Added `DECK_MARKUP` + `styled()`
+  to `deck-lib/deck_theme.py` (style strings, so `big` keeps its bold) and moved
+  every call site onto it. **All four themed apps were affected** ‚Äî deck-store,
+  deck-radio, deck-serial, and deck-sensors, where `[big]` meant the entire
+  sensor-card readout (every temp/humidity/pressure value) was unstyled.
+  A headless probe now renders each `DECK_MARKUP` name and asserts it resolves
+  to an on-palette colour, plus a source audit that fails on any leftover inert
+  tag or hardcoded hex.
+- **The store opened with nothing selected.** `ListView.clear()`/`append()` only
+  *schedule* the un/mounts, so the index was being assigned to a still-empty
+  list. Selection is now tracked on the app itself (authoritative and available
+  immediately, so an action fired right after a filter can't hit a stale
+  widget), with the highlight bar catching up on the next refresh.
+- **The Updates tab reset the view.** It was rebuilt by clearing the entire tab
+  bar, dropping the user back to "All" after every refresh; it is now inserted
+  and removed in place, preserving the active tab.
+- **`uninstall` was unreachable and lied on failure.** It had no CLI command and
+  no key binding, and `rmtree(ignore_errors=True)` reported success even when
+  git's read-only objects left a half-deleted `src/` (which then breaks the next
+  clone). It now chmod-and-retries, reports honestly, and is wired up as
+  `deck-store uninstall <id>` (prompts; `--yes` to skip) and `x` in the TUI ‚Äî
+  **two presses to confirm**, because `src/` is where grimoire keeps its tome
+  and every imported corpus.
+
+### security-suite "advanced tools" ‚Äî NOT in this repo (Claude)
+
+‚ö†Ô∏è These changes are in `apps/security-suite/src/`, which is a **gitignored
+vendored clone** of [PyMite6941/Security-Suite]. They are *not* tracked here and
+must be committed and pushed from inside that clone or they are one
+`rm -rf src/` from gone. Noting them here because they also explain why that
+clone is dirty ‚Äî `install.sh` will refuse to fast-forward until it's clean.
+(It already was dirty before this work: `.gitignore`, `frontend/cli.py`,
+`frontend/cool-app.py` and `requirements.txt` all had uncommitted edits.)
+
+- **`backend/advanced tools/log_parser.py` was an empty file** ‚Äî written. Regex
+  parser for auth/system logs, stdlib only (it has to run on a machine that is
+  already having a bad day). Parses sshd/sudo/su/useradd/PAM/UFW lines from
+  syslog, `journalctl -o short-iso`, or prefix-less `-o cat`, then *correlates*:
+  sliding-window brute force, credential spraying across usernames, privilege
+  changes, and success-after-failures ‚Äî a brute force that stops is a brute
+  force that worked. `--findings` exits 2 on high/critical so it can gate a
+  scheduled check. Unmatched lines are dropped on purpose: this is a detector,
+  and auth.log is mostly chatter that would bury the signal.
+- **`ai_phishing_detector.py` could not train at all.** `PATH_ROOT` was the
+  `advanced tools/` directory, so `DATA_PATH` resolved to
+  `backend/advanced tools/tests/urls.csv`, which does not exist ‚Äî training died
+  with FileNotFoundError and `save_model` would have scattered a stray `models/`
+  in there. Re-anchored on the app root. Also fixed a `UnicodeEncodeError` that
+  killed the CLI at startup whenever the checkout path contains non-ASCII
+  characters (it prints `MODEL_PATH`) on a legacy-codepage console.
+- **`tests/urls.csv` expanded 4 ‚Üí 106 rows** (53/53 balanced, no duplicates).
+  Four rows could not train anything: a 25% split left a single test sample.
+  First pass hit 97.4% CV but still called `http://paypal-verify-login.tk/secure`
+  *safe* ‚Äî every phishing example was long, so the model learnt "long = bad"
+  instead of the suspicious TLD. Added short phishing URLs and long legitimate
+  ones so the length distributions overlap; that URL now scores 0.93 and a
+  held-out set of 10 URLs never seen in training classifies 10/10. 5-fold CV
+  93.4% (worst fold 90.5%) ‚Äî lower than the first pass and more honest, since
+  the easy length shortcut is gone.
+
+### Bash as the deck's root environment (Claude)
+
+The deck is console-first ‚Äî `deck-ide`/`deck-lite` kill the desktop on purpose ‚Äî
+but two things quietly assumed a GUI or a particular shell:
+
+- **`os/setup.sh` now pins the login shell to bash** for the deck user *and*
+  root, and wires `bashrc-cyberdeck.sh` into root's `~/.bashrc` too. Everything
+  the deck adds (prompt, `deck-lite`/`deck-gui`, `temp`, `fs`, the `deck-ide`
+  auto-resume) loads from `~/.bashrc`; under sh/dash/zsh none of it existed and
+  `sudo -i` dropped into a bare shell. Raspberry Pi OS defaults to bash, but
+  that was an assumption, not a guarantee. Idempotent ‚Äî `chsh` only runs when
+  the shell is actually wrong, and `/etc/shells` is topped up first.
+- **`os/extras/bin/deck-fs`** ‚Äî new file explorer written in bash (no python, no
+  ncurses, coreutils only), because `pcmanfm` only exists on the desktop image
+  and vanishes the moment you go headless. Vim-style keys, dirs-before-files,
+  filter, hidden toggle, `$EDITOR`/pager handoff, copy-path, run-command-on-
+  selection. It prints only the directory you quit in, so `cd "$(deck-fs)"`
+  works; the new `fs` function in `bashrc-cyberdeck.sh` wraps that (it has to be
+  a function ‚Äî a subshell can't `cd` its parent). Installed by
+  `setup-extras.sh`, listed in `deck-help`.
+  Verified by driving the real key loop headlessly: navigation in/out/home/last,
+  the `cd "$(‚Ä¶)"` stdout contract, case-insensitive filter, empty-filter and
+  empty-directory safety, hidden toggle, and filenames containing spaces.
+
+**apps/deck-lib/log_parser.py** ‚Äî new regex log parser (stdlib only, so it runs
+anywhere on the deck). Recognises journald/syslog, kernel dmesg, Python
+`logging`, nginx/combined access logs, ISO-stamped app logs and deck-serial's
+UART captures, normalising each into a `LogEvent` (ts / level / source / msg /
+fields). Unrecognised lines are kept as `fmt="raw"` rather than dropped ‚Äî on a
+field deck the line you can't classify is usually the one you needed. Also folds
+Python tracebacks (including the unindented final exception line) into the one
+ERROR they belong to, promotes level-less "Failed to start ‚Ä¶" syslog lines to
+ERROR, derives severity from HTTP status, and `fingerprint()`s messages so
+recurring events group in `--stats`. Timestamps normalise to naive UTC and
+year-less/time-only stamps get dated against today, since strptime otherwise
+lands them in 1900 and wrecks any sort or timespan. CLI:
+`log_parser.py FILE‚Ä¶ [--level --source --grep --fmt --json --stats]`, `-` reads
+stdin. Verified with a 40-check suite over samples of every supported format
+plus the CLI surface.
+
+Also: `run_tui` split into `build_store_app()` so the TUI can be driven
+headlessly; unknown app ids now report instead of failing silently. Every
+launcher (`deck-radio`, `deck-sensors`, `deck-serial`, `deck-store` `run.sh` and
+`grimoire`/`security-suite` `install.sh`) is now recorded **100755** ‚Äî this repo
+sets `core.fileMode=false`, so the bit has to be set with
+`git update-index --chmod=+x` or the scripts land non-executable on the Pi.
+
+## 2026-07-02 ÔøΩ Claude (generalized vendor-app auto-update into pps/_vendor_launcher.sh)
 
 Extracted the clone/fetch/summarize/prompt logic just built for
 security-suite/run.sh into a shared, sourceable library,
@@ -10,60 +168,60 @@ security-suite/run.sh into a shared, sourceable library,
 pattern), so any future app whose real code lives in an external repo can
 reuse it instead of duplicating the script.
 
-- **pps/_vendor_launcher.sh** ó new shared helper exposing endor_sync
+- **pps/_vendor_launcher.sh** ÔøΩ new shared helper exposing endor_sync
   <label> <repo-url> <src-dir> "$@": clone-on-first-run, fetch + prompt
   with a change summary on later runs (interactive only, fast-forward
   only), --check-updates=on/off toggle.
-- **pps/security-suite/run.sh** ó rewritten to source the shared helper
+- **pps/security-suite/run.sh** ÔøΩ rewritten to source the shared helper
   instead of inlining the logic; behavior unchanged (re-verified against a
   local fake-upstream repo: clone, decline, accept, toggle off/on).
 - **Docs**: pps/README.md gained a "Vendoring an external app" section;
   pps/security-suite/README.md and AGENTS.md cross-reference it.
 - **Explicit scope note (per user request)**: this auto-update-check-and-
   prompt pattern is an pps/-only convention. The os/ layer is never
-  managed this way ó it only changes when a human deliberately re-runs the
+  managed this way ÔøΩ it only changes when a human deliberately re-runs the
   installer for an actual functionality or security update, never via a
   background/automatic check.
 
-## 2026-07-02 ó Claude (security-suite: submodule ? self-updating launcher)
+## 2026-07-02 ÔøΩ Claude (security-suite: submodule ? self-updating launcher)
 
 Replaced the pps/security-suite git submodule with a self-updating
 launcher script. Motivation: the submodule pinned an exact commit of
 PyMite6941/Security-Suite in this repo's history, so checking whether that
 pin was stale (or updating it) required cross-repo GitHub access this repo's
-sessions don't always have ó the pin silently drifted out of sync with no
+sessions don't always have ÔøΩ the pin silently drifted out of sync with no
 easy way to notice.
 
 - **Removed**: pps/security-suite submodule entry (.gitmodules,
   .git/config, the gitlink itself).
-- **Added pps/security-suite/run.sh** ó thin launcher, not the app: first
+- **Added pps/security-suite/run.sh** ÔøΩ thin launcher, not the app: first
   run clones Security-Suite into src/ (gitignored, a live clone the deck
   manages); every later run fetches origin, and if there are new commits,
   prints a one-line-per-commit summary and asks Update now? [y/N] before
-  launching (fast-forward only ó never touches local edits in src/).
+  launching (fast-forward only ÔøΩ never touches local edits in src/).
   Non-interactive runs (no TTY) skip the check instead of blocking.
 - **Toggle**: un.sh --check-updates=off stops the prompt (persists in
   .check-updates, gitignored); --check-updates=on resumes it.
-- **pps/security-suite/README.md** ó documents the above.
+- **pps/security-suite/README.md** ÔøΩ documents the above.
 - **pps/README.md** / **pps/.gitignore** updated to match.
 
-## 2026-07-02 ó Claude (checklist/doc-sync review)
+## 2026-07-02 ÔøΩ Claude (checklist/doc-sync review)
 
 Ran a review pass (security/permissions, shopping-list & BOM completeness,
 doc/tree sync) to catch anything the 2026-06-16 audit missed. Findings and fixes:
 
-- **CHANGELOG.md** ó backfilled the missing entry for the 2026-06-16 audit-fixes
+- **CHANGELOG.md** ÔøΩ backfilled the missing entry for the 2026-06-16 audit-fixes
   commit (added below), which had no changelog entry of its own.
-- **pps/README.md** ó added the undocumented pps/deck-lib/ shared-helpers
+- **pps/README.md** ÔøΩ added the undocumented pps/deck-lib/ shared-helpers
   folder to the app list, tree, and roadmap.
-- **SHOPPING.md** ó added a USB microphone line item (both checklists);
+- **SHOPPING.md** ÔøΩ added a USB microphone line item (both checklists);
   pps/deck-whisper records via PyAudio and had no mic anywhere in the parts
   lists.
-- **BOM.md** ó added the comms/radio subsystem (RTL-SDR, PN532, LoRa module,
+- **BOM.md** ÔøΩ added the comms/radio subsystem (RTL-SDR, PN532, LoRa module,
   Pi Pico, SMA antenna) that SHOPPING.md already priced but BOM.md omitted
   entirely; added the microphone; clarified Y2M connector count (was ambiguous
-  "2 pairs" vs SHOPPING.md's "x2" ó confirmed 2 units per BUILD-GUIDE).
-- **.gitignore** ó added .env/*.env proactively (none currently tracked,
+  "2 pairs" vs SHOPPING.md's "x2" ÔøΩ confirmed 2 units per BUILD-GUIDE).
+- **.gitignore** ÔøΩ added .env/*.env proactively (none currently tracked,
   but nothing was excluding them either).
 - Verified clean, no action needed: file permissions (all scripts still
   +x), no secrets or personal-machine paths committed, os/security/*
@@ -72,73 +230,73 @@ doc/tree sync) to catch anything the 2026-06-16 audit missed. Findings and fixes
   and inspect_buttons.py still reference Rigth screen frame.3mf / ...rigth
   retainer.3mf as **input** filenames from the hardware/ submodule (not
   Right). Left alone because those paths must match the submodule's actual
-  filenames, which weren't checked out to verify ó confirm against upstream
+  filenames, which weren't checked out to verify ÔøΩ confirm against upstream
   before renaming.
 
-## 2026-07-01 ó Agent (deck-settings: unified system configuration TUI)
+## 2026-07-01 ÔøΩ Agent (deck-settings: unified system configuration TUI)
 
-**New pps/deck-settings/** ó full-featured Textual TUI for managing every
+**New pps/deck-settings/** ÔøΩ full-featured Textual TUI for managing every
 aspect of the deck:
-- **Network & WiFi** ó scan visible networks, check connection status and IP
-- **Storage** ó disk usage, zram compression stats, mount points
-- **Apps** ó list installed project apps with launcher availability
-- **System** ó hostname, per-core CPU governor switching (P/O/S/C keys),
+- **Network & WiFi** ÔøΩ scan visible networks, check connection status and IP
+- **Storage** ÔøΩ disk usage, zram compression stats, mount points
+- **Apps** ÔøΩ list installed project apps with launcher availability
+- **System** ÔøΩ hostname, per-core CPU governor switching (P/O/S/C keys),
   display mode (calls deck-mode), uptime & temperature
-- **Security** ó deck-vault status/open/close, fingerprint scanner status,
+- **Security** ÔøΩ deck-vault status/open/close, fingerprint scanner status,
   SSH service + configuration status, UFW firewall status
-- **About** ó Pi model, kernel, OS version, memory, disk, temp, uptime
+- **About** ÔøΩ Pi model, kernel, OS version, memory, disk, temp, uptime
 
-**New os/extras/bin/deck-settings** ó launcher that auto-deploys the app on
+**New os/extras/bin/deck-settings** ÔøΩ launcher that auto-deploys the app on
 first run from /opt/cyberdeck/lib/deck-settings/ to ~/.local/share/deck-settings/.
 Installs textual if missing.
 
-**New os/extras/lib/deck-settings/deck-settings.py** ó the Textual app source,
+**New os/extras/lib/deck-settings/deck-settings.py** ÔøΩ the Textual app source,
 deployed by setup-extras.sh to the staging lib directory so it's included in the
 bootable SD card image via the inject-to-sd.ps1 pipeline.
 
-**Modified os/extras/setup-extras.sh** ó installs deck-settings command +
+**Modified os/extras/setup-extras.sh** ÔøΩ installs deck-settings command +
 copies lib. Updated "Done" summary.
 
-**Modified os/extras/bin/deck-help** ó added deck-settings to System Commands
+**Modified os/extras/bin/deck-help** ÔøΩ added deck-settings to System Commands
 section.
 
-**Modified pps/README.md** ó added deck-settings to the app listing, directory
+**Modified pps/README.md** ÔøΩ added deck-settings to the app listing, directory
 tree, and roadmap table.
 
-## 2026-07-01 ó Agent (biometric fingerprint scanner support)
+## 2026-07-01 ÔøΩ Agent (biometric fingerprint scanner support)
 
-**New os/upgrades/biometrics/** ó opt-in biometric authentication layer:
-- in/deck-biometric ó GT-521F32 / R307 / R503 UART fingerprint scanner driver
+**New os/upgrades/biometrics/** ÔøΩ opt-in biometric authentication layer:
+- in/deck-biometric ÔøΩ GT-521F32 / R307 / R503 UART fingerprint scanner driver
   with enroll/verify/identify/list/delete/clear/vault-open commands. Implements
   the FPS_GEN2 protocol over pyserial, stores templates on-sensor (never leaves
   the module), keeps local name->ID mapping in ~/.deck-biometric/enrollments.json.
   ault-open integrates with deck-vault for fingerprint-based unlock.
-- setup-biometrics.sh ó installs pyserial, deploys command, adds user to
+- setup-biometrics.sh ÔøΩ installs pyserial, deploys command, adds user to
   dialout group, appends commented enable_uart=1 to config.txt.
-- iometric.service ó optional systemd oneshot unit for boot-time status.
-- README.md ó hardware wiring (VCC->3.3V, GND->GND, TX->GPIO15, RX->GPIO14),
+- iometric.service ÔøΩ optional systemd oneshot unit for boot-time status.
+- README.md ÔøΩ hardware wiring (VCC->3.3V, GND->GND, TX->GPIO15, RX->GPIO14),
   commands, vault integration, security notes.
 
-**Hardware CAD** hardware-custom/Biometrics/make_fingerprint_mount.py ó
+**Hardware CAD** hardware-custom/Biometrics/make_fingerprint_mount.py ÔøΩ
 parametric FreeCAD generator for a 3D-printed scanner bracket, supporting
 GT-521F32 and R307 footprints with M2 screw bosses and deck mounting holes.
 
-**Modified os/upgrades/setup-upgrades.sh** ó added step [7/7] calling
+**Modified os/upgrades/setup-upgrades.sh** ÔøΩ added step [7/7] calling
 biometrics sub-installer. Header updated to list all 7 upgrades.
 
-**Modified os/upgrades/config-upgrades.txt** ó added commented UART enable
+**Modified os/upgrades/config-upgrades.txt** ÔøΩ added commented UART enable
 lines for the fingerprint scanner under # --- CYBERDECK-BIOMETRICS ---.
 
-**Modified os/upgrades/README.md** ó added biometrics to the upgrade table,
+**Modified os/upgrades/README.md** ÔøΩ added biometrics to the upgrade table,
 new section 6 with wiring table and commands, Files table updated.
 
-**Modified SHOPPING.md** ó added GT-521F32 (~-30) and R307 (~-18) to
+**Modified SHOPPING.md** ÔøΩ added GT-521F32 (~-30) and R307 (~-18) to
 both Amazon and Shopee/Lazada checklists.
 
-**Modified BOM.md** ó added "Biometrics add-on" section with scanner picks,
+**Modified BOM.md** ÔøΩ added "Biometrics add-on" section with scanner picks,
 mounting notes, and threat-model disclaimer (convenience, not high-security).
 
-## 2026-06-16 ó Agent (post-publish audit fixes)
+## 2026-06-16 ÔøΩ Agent (post-publish audit fixes)
 
 ## 2026-06-16 ‚Äî Agent (repo made public on GitHub)
 

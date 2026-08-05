@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deck-settings launcher — system configuration TUI
+# deck-radio launcher — RTL-SDR spectrum scanner + decoders (uses shared apps/ venv)
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$DIR/../.venv/bin/python" ]]; then
@@ -11,4 +11,4 @@ elif command -v python3 &>/dev/null; then
 else
     PYTHON="python"
 fi
-exec "$PYTHON" "$DIR/deck-settings.py" "$@"
+exec "$PYTHON" "$DIR/deck-radio.py" "$@"

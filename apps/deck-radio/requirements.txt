@@ -1,0 +1,3 @@
+textual>=0.60
+rich>=13.0
+# System tools (apt, not pip): rtl-sdr rtl-433 dump1090-fa
